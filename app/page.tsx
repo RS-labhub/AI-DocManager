@@ -1,276 +1,268 @@
-import { Button } from "@/components/ui/button"
+﻿import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Shield, Bot, Lock, FileText, Users, CheckCircle } from "lucide-react"
+import Image from "next/image"
+import {
+  Shield,
+  Bot,
+  Lock,
+  FileText,
+  Building2,
+  ArrowRight,
+  Key,
+  Users,
+  Crown,
+  Sparkles,
+  Zap,
+  Eye,
+  CheckCircle2,
+} from "lucide-react"
+
+const FEATURES = [
+  {
+    icon: FileText,
+    title: "Smart Documents",
+    desc: "Upload PDF, DOCX, TXT, CSV with automatic content extraction. Write rich content with the built-in markdown editor.",
+  },
+  {
+    icon: Bot,
+    title: "AI-Powered Actions",
+    desc: "Summarize, analyze sentiment, extract key points, improve writing, translate, and generate Q&A from any document.",
+  },
+  {
+    icon: Lock,
+    title: "Encrypted API Keys",
+    desc: "AES-256-GCM encryption for all API keys. Unique IV and auth tag per key. Your keys are never exposed.",
+  },
+  {
+    icon: Building2,
+    title: "Multi-Organization",
+    desc: "Complete data isolation between organizations. Cross-org capabilities for elevated roles.",
+  },
+  {
+    icon: Shield,
+    title: "4-Tier RBAC",
+    desc: "User, Admin, Super Admin, and God roles with granular permission control at every level.",
+  },
+  {
+    icon: Key,
+    title: "Bring Your Own Keys",
+    desc: "No vendor lock-in. Use free-tier Groq, paid OpenAI, or Anthropic. Switch providers anytime.",
+  },
+]
+
+const ROLES = [
+  {
+    role: "God",
+    level: "100",
+    icon: Crown,
+    color: "bg-stone-900 dark:bg-stone-100",
+    textColor: "text-stone-100 dark:text-stone-900",
+    perms: ["Full platform control", "All organizations", "Bypass passwords", "Assign any role"],
+  },
+  {
+    role: "Super Admin",
+    level: "75",
+    icon: Shield,
+    color: "bg-stone-700 dark:bg-stone-300",
+    textColor: "text-stone-100 dark:text-stone-900",
+    perms: ["Cross-org access", "Promote to admin", "Export data", "Audit logs"],
+  },
+  {
+    role: "Admin",
+    level: "50",
+    icon: Users,
+    color: "bg-stone-500 dark:bg-stone-400",
+    textColor: "text-white dark:text-stone-900",
+    perms: ["Org management", "All org documents", "User management", "Org statistics"],
+  },
+  {
+    role: "User",
+    level: "10",
+    icon: FileText,
+    color: "bg-stone-200 dark:bg-stone-600",
+    textColor: "text-stone-700 dark:text-stone-100",
+    perms: ["Own documents", "AI actions", "Personal API keys", "Profile settings"],
+  },
+]
+
+const HIGHLIGHTS = [
+  { icon: Zap, text: "Groq, OpenAI, Anthropic" },
+  { icon: Lock, text: "AES-256-GCM" },
+  { icon: Building2, text: "Multi-Org" },
+  { icon: Shield, text: "4-Tier RBAC" },
+  { icon: Eye, text: "Permit.io ABAC" },
+  { icon: Sparkles, text: "AI-Powered" },
+]
 
 export default function Home() {
   return (
-    <div className="flex flex-col items-center justify-center space-y-12 py-12">
-      {/* Hero Section */}
-      <div className="text-center space-y-4 max-w-4xl px-4">
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight dark:bg-gradient-to-r dark:from-blue-200 dark:via-white dark:to-purple-200 dark:bg-clip-text dark:text-transparent">
-          Secure Document Management with AI Access Control
-        </h1>
-        <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-          A comprehensive document management system with fine-grained authorization for both users and AI agents
-          powered by Permit.io
-        </p>
-        <div className="flex gap-4 justify-center mt-8">
-          <Button asChild size="lg" className="dark:bg-primary dark:hover:bg-primary/90 transition-all">
-            <Link href="/documents">View Documents</Link>
-          </Button>
-          <Button
-            asChild
-            variant="outline"
-            size="lg"
-            className="dark:border-primary/30 dark:hover:border-primary/70 dark:hover:bg-primary/10 transition-all"
-          >
-            <Link href="/login">Login</Link>
-          </Button>
-        </div>
-      </div>
+    <div className="relative">
+      {/* Hero */}
+      <section className="relative py-20 md:py-32 lg:py-40 overflow-hidden">
+        <div className="absolute inset-0 grid-bg opacity-40" />
+        <div className="absolute inset-0 bg-gradient-to-b from-background via-background/95 to-background" />
 
-      {/* Feature Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl w-full px-4">
-        <div className="bg-card border rounded-lg p-6 space-y-4 dark:border-primary/10 dark:hover:border-primary/30 transition-all animate-hover">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-primary/10 dark:bg-primary/20">
-              <Shield className="h-8 w-8 text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold">Role-Based Access Control</h2>
+        <div className="container mx-auto px-4 flex flex-col items-center text-center max-w-4xl relative z-10">
+          {/* <div className="mb-6 animate-fade-in">
+            <Image
+              src="/logo.png"
+              alt="Radhika's DocManager"
+              width={200}
+              height={200}
+              className="h-10 w-auto object-contain mx-auto"
+              priority
+            />
+          </div> */}
+
+          <div className="inline-flex items-center gap-1.5 rounded-full border bg-card/50 backdrop-blur px-3 py-1.5 text-xs text-muted-foreground mb-6 animate-fade-in">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            <span className="sm:hidden">Radhika's Document Manager</span>
+            <span className="hidden sm:inline">Radhika&apos;s DocManager &mdash; Enterprise AI Document Management</span>
           </div>
-          <p className="text-muted-foreground">
-            Different roles (Admin, Editor, Viewer) have different permissions on documents.
+
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter leading-[1.05] animate-fade-in">
+            <span className="bg-gradient-to-br from-foreground via-foreground/90 to-foreground/70 bg-clip-text">
+              Intelligent documents.
+            </span>
+            <br />
+            <span className="bg-gradient-to-br from-foreground/80 to-foreground/50 bg-clip-text text-transparent">
+              Secure by design.
+            </span>
+          </h1>
+
+          <p className="mt-5 text-sm md:text-base text-muted-foreground max-w-lg leading-relaxed animate-fade-in-up">
+            AI-powered document management with encrypted API keys, multi-organization support, and fine-grained access control. Built for teams that take security seriously.
           </p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>Admins can create, view, edit, and delete any document</li>
-            <li>Editors can create, view, and edit documents</li>
-            <li>Viewers can only view documents</li>
-          </ul>
-        </div>
 
-        <div className="bg-card border rounded-lg p-6 space-y-4 dark:border-primary/10 dark:hover:border-primary/30 transition-all animate-hover">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-primary/10 dark:bg-primary/20">
-              <Lock className="h-8 w-8 text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold">Attribute-Based Access</h2>
-          </div>
-          <p className="text-muted-foreground">Access is determined by document attributes and user context.</p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>Document owners have full control over their documents</li>
-            <li>Public documents can be viewed by anyone</li>
-            <li>Private documents are only accessible to specific users</li>
-          </ul>
-        </div>
-
-        <div className="bg-card border rounded-lg p-6 space-y-4 dark:border-primary/10 dark:hover:border-primary/30 transition-all animate-hover">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-primary/10 dark:bg-primary/20">
-              <Bot className="h-8 w-8 text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold">AI Agent Authorization</h2>
-          </div>
-          <p className="text-muted-foreground">Fine-grained control over what AI agents can access and modify.</p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>Define AI agent roles with specific capabilities</li>
-            <li>Control which documents AI can access</li>
-            <li>Set permission levels from read-only to full access</li>
-          </ul>
-        </div>
-
-        <div className="bg-card border rounded-lg p-6 space-y-4 dark:border-primary/10 dark:hover:border-primary/30 transition-all animate-hover">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-primary/10 dark:bg-primary/20">
-              <CheckCircle className="h-8 w-8 text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold">AI Action Approvals</h2>
-          </div>
-          <p className="text-muted-foreground">Human oversight for AI actions with approval workflows.</p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>Require human approval for sensitive AI operations</li>
-            <li>Review and approve/reject AI-suggested changes</li>
-            <li>Maintain audit trail of all AI actions</li>
-          </ul>
-        </div>
-
-        <div className="bg-card border rounded-lg p-6 space-y-4 dark:border-primary/10 dark:hover:border-primary/30 transition-all animate-hover">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-primary/10 dark:bg-primary/20">
-              <FileText className="h-8 w-8 text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold">Document Intelligence</h2>
-          </div>
-          <p className="text-muted-foreground">AI-powered document analysis and enhancement.</p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>Analyze document content and structure</li>
-            <li>Generate summaries of documents</li>
-            <li>Suggest improvements to document content</li>
-          </ul>
-        </div>
-
-        <div className="bg-card border rounded-lg p-6 space-y-4 dark:border-primary/10 dark:hover:border-primary/30 transition-all animate-hover">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-primary/10 dark:bg-primary/20">
-              <Users className="h-8 w-8 text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold">Comprehensive Admin Panel</h2>
-          </div>
-          <p className="text-muted-foreground">Complete control over users, AI agents, and permissions.</p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>Manage AI agents and their capabilities</li>
-            <li>Configure AI permission settings</li>
-            <li>Review and approve AI action requests</li>
-          </ul>
-        </div>
-      </div>
-
-      {/* AI Authorization Showcase */}
-      <div className="w-full max-w-6xl px-4 py-8">
-        <div className="bg-card border rounded-lg p-8 dark:border-primary/10 dark:bg-gradient-subtle">
-          <h2 className="text-3xl font-bold mb-6 text-center dark:bg-gradient-to-r dark:from-blue-200 dark:to-purple-200 dark:bg-clip-text dark:text-transparent">
-            AI Authorization with Permit.io
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <h3 className="text-xl font-semibold">How It Works</h3>
-              <p className="text-muted-foreground">
-                Our system uses Permit.io to implement fine-grained authorization for AI agents, ensuring they only have
-                access to the resources and actions they need.
-              </p>
-
-              <div className="space-y-2 mt-6">
-                <div className="flex items-start gap-2">
-                  <div className="bg-primary/10 dark:bg-primary/20 p-2 rounded-full mt-1">
-                    <Shield className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Define AI Agent Roles</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Create AI agents with specific roles and capabilities
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2">
-                  <div className="bg-primary/10 dark:bg-primary/20 p-2 rounded-full mt-1">
-                    <Lock className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Set Permission Levels</h4>
-                    <p className="text-sm text-muted-foreground">Configure what each AI agent can access and modify</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2">
-                  <div className="bg-primary/10 dark:bg-primary/20 p-2 rounded-full mt-1">
-                    <CheckCircle className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Approval Workflows</h4>
-                    <p className="text-sm text-muted-foreground">Require human approval for sensitive AI operations</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2">
-                  <div className="bg-primary/10 dark:bg-primary/20 p-2 rounded-full mt-1">
-                    <FileText className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Audit and Monitoring</h4>
-                    <p className="text-sm text-muted-foreground">Track all AI actions and approvals</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-muted p-6 rounded-lg border border-border dark:border-primary/20 dark:bg-secondary/50 backdrop-blur-sm">
-              <h3 className="text-xl font-semibold mb-4">Permission Levels</h3>
-
-              <div className="space-y-4">
-                <div className="p-3 bg-background rounded-md border dark:border-primary/10 dark:bg-card/80 transition-all hover:shadow-md dark:hover:shadow-primary/5">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-medium">No Access</h4>
-                    <div className="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full">
-                      Blocked
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">AI agent cannot access the resource at all</p>
-                </div>
-
-                <div className="p-3 bg-background rounded-md border dark:border-primary/10 dark:bg-card/80 transition-all hover:shadow-md dark:hover:shadow-primary/5">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-medium">Read Only</h4>
-                    <div className="px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 text-xs rounded-full">
-                      Limited
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">AI agent can only read but not modify resources</p>
-                </div>
-
-                <div className="p-3 bg-background rounded-md border dark:border-primary/10 dark:bg-card/80 transition-all hover:shadow-md dark:hover:shadow-primary/5">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-medium">Suggest Only</h4>
-                    <div className="px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 text-xs rounded-full">
-                      Supervised
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    AI can suggest changes that require human approval
-                  </p>
-                </div>
-
-                <div className="p-3 bg-background rounded-md border dark:border-primary/10 dark:bg-card/80 transition-all hover:shadow-md dark:hover:shadow-primary/5">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-medium">Full Access</h4>
-                    <div className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full">
-                      Autonomous
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">AI has full access to read and modify resources</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 text-center">
-            <Button
-              asChild
-              size="lg"
-              className="dark:bg-primary/90 dark:hover:bg-primary transition-all dark:shadow-lg dark:shadow-primary/20"
-            >
-              <Link href="/admin/ai-permissions">Explore AI Permissions</Link>
+          <div className="flex gap-3 mt-8 animate-fade-in-up">
+            <Button asChild size="lg" className="h-10 px-6 gap-2 text-sm font-medium">
+              <Link href="/register">
+                Get Started <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="h-10 px-6 text-sm">
+              <Link href="/login">Sign In</Link>
             </Button>
           </div>
-        </div>
-      </div>
 
-      {/* CTA Section */}
-      <div className="w-full max-w-4xl px-4 py-8 text-center">
-        <h2 className="text-3xl font-bold mb-4 dark:bg-gradient-to-r dark:from-blue-200 dark:to-purple-200 dark:bg-clip-text dark:text-transparent">
-          Ready to get started?
-        </h2>
-        <p className="text-xl text-muted-foreground mb-8">
-          Experience secure document management with fine-grained AI authorization
-        </p>
-        <div className="flex gap-4 justify-center">
-          <Button
-            asChild
-            size="lg"
-            className="dark:bg-primary dark:hover:bg-primary/90 transition-all dark:shadow-lg dark:shadow-primary/20"
-          >
-            <Link href="/documents">View Documents</Link>
-          </Button>
-          <Button
-            asChild
-            variant="outline"
-            size="lg"
-            className="dark:border-primary/30 dark:hover:border-primary/70 dark:hover:bg-primary/10 transition-all"
-          >
-            <Link href="/login">Login</Link>
-          </Button>
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 mt-12 animate-fade-in-up">
+            {HIGHLIGHTS.map((item) => (
+              <span key={item.text} className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                <item.icon className="h-3 w-3" />
+                {item.text}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      </section>
+
+      {/* Features */}
+      <section className="py-16 md:py-24 border-t">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12 max-w-md mx-auto">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.2em] mb-2">Features</p>
+            <h2 className="text-xl md:text-3xl font-bold tracking-tight">Everything you need</h2>
+            <p className="mt-2 text-muted-foreground text-sm">A complete platform for secure document management with built-in AI.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-border rounded-xl overflow-hidden max-w-4xl mx-auto border">
+            {FEATURES.map((f, i) => (
+              <div key={i} className="bg-card p-6 group hover:bg-accent/30 transition-colors">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted mb-3 group-hover:bg-foreground/10 transition-colors">
+                  <f.icon className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <h3 className="font-semibold text-sm mb-1.5">{f.title}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="py-16 md:py-24 border-t">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12 max-w-md mx-auto">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.2em] mb-2">How it works</p>
+            <h2 className="text-xl md:text-3xl font-bold tracking-tight">Three steps to get started</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+            {[
+              { step: "01", title: "Create & upload", desc: "Sign up, create your organization, and upload documents or write them with the markdown editor.", icon: FileText },
+              { step: "02", title: "Add your AI key", desc: "Configure your Groq, OpenAI, or Anthropic API key. Encrypted with AES-256-GCM before storage.", icon: Key },
+              { step: "03", title: "Analyze & collaborate", desc: "Run AI actions on your documents. Summarize, analyze, translate, and more. Invite your team.", icon: Sparkles },
+            ].map((s) => (
+              <div key={s.step} className="border rounded-xl p-5 bg-card">
+                <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-wider">Step {s.step}</span>
+                <div className="flex items-center gap-2 mt-2 mb-2">
+                  <s.icon className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="font-semibold text-sm">{s.title}</h3>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Role Hierarchy */}
+      <section className="py-16 md:py-24 border-t">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12 max-w-md mx-auto">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.2em] mb-2">Access Control</p>
+            <h2 className="text-xl md:text-3xl font-bold tracking-tight">Role hierarchy</h2>
+            <p className="mt-2 text-muted-foreground text-sm">Four tiers of access control for complete platform governance.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-4xl mx-auto">
+            {ROLES.map((tier, i) => (
+              <div key={i} className="border rounded-xl p-5 bg-card hover:shadow-sm transition-shadow">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${tier.color}`}>
+                    <tier.icon className={`h-3.5 w-3.5 ${tier.textColor}`} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm leading-tight">{tier.role}</p>
+                    <p className="text-[10px] text-muted-foreground">Level {tier.level}</p>
+                  </div>
+                </div>
+                <ul className="space-y-1.5">
+                  {tier.perms.map((p, j) => (
+                    <li key={j} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-16 md:py-24 border-t">
+        <div className="container mx-auto px-4">
+          <div className="rounded-xl border bg-card/50 backdrop-blur p-10 md:p-14 text-center max-w-xl mx-auto relative overflow-hidden">
+            <div className="absolute inset-0 dot-bg opacity-30" />
+            <div className="relative z-10">
+              <h2 className="text-lg md:text-2xl font-bold tracking-tight">Ready to get started?</h2>
+              <p className="mt-2 text-muted-foreground text-sm max-w-sm mx-auto">Create your account, join an organization, and start managing documents with AI.</p>
+              <div className="flex gap-3 justify-center mt-6">
+                <Button asChild size="lg" className="h-10 px-6 gap-2 text-sm font-medium">
+                  <Link href="/register">
+                    Create Account <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="h-10 px-6 text-sm">
+                  <Link href="/login">Sign In</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   )
 }

@@ -2,94 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ══════════════════════════════════════════════════════════════
+   AI DocManager — Clean Design System
+   Inspired by AutoSend / Minimal SaaS aesthetic
+   Font: Inter · Palette: Stone / Warm Neutrals
+   ══════════════════════════════════════════════════════════════ */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 0 0% 99%;
+    --foreground: 20 14% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 20 14% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 20 14% 10%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 24 10% 10%;
+    --primary-foreground: 60 9% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 20 6% 95%;
+    --secondary-foreground: 20 14% 10%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 20 6% 95%;
+    --muted-foreground: 20 5% 46%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 20 6% 93%;
+    --accent-foreground: 20 14% 10%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 60 9% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 20 6% 90%;
+    --input: 20 6% 90%;
+    --ring: 24 6% 50%;
+    --radius: 0.625rem;
 
-    --radius: 0.5rem;
+    --success: 152 60% 36%;
+    --warning: 38 92% 50%;
 
-    --header: 0 0% 100%;
-    --header-foreground: 222.2 84% 4.9%;
-
-    --footer: 0 0% 100%;
-    --footer-foreground: 222.2 84% 4.9%;
-
-    --body: 0 0% 100%;
-
-    --gradient-start: rgba(255, 255, 255, 0.1);
-    --gradient-end: rgba(255, 255, 255, 0.05);
+    --sidebar: 20 6% 97%;
+    --sidebar-foreground: 20 14% 10%;
   }
 
   .dark {
-    /* Modern dark theme with deep blues and purples */
-    --background: 230 25% 10%; /* Deep blue-gray */
-    --foreground: 210 40% 98%;
+    --background: 20 10% 6%;
+    --foreground: 20 6% 90%;
 
-    --card: 232 26% 15%; /* Slightly lighter than background */
-    --card-foreground: 210 40% 98%;
+    --card: 20 10% 8%;
+    --card-foreground: 20 6% 90%;
 
-    --popover: 232 26% 15%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 20 10% 8%;
+    --popover-foreground: 20 6% 90%;
 
-    --primary: 217 91% 60%; /* Vibrant blue */
-    --primary-foreground: 210 40% 98%;
+    --primary: 20 6% 90%;
+    --primary-foreground: 20 10% 6%;
 
-    --secondary: 232 26% 20%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 20 8% 12%;
+    --secondary-foreground: 20 6% 82%;
 
-    --muted: 232 26% 20%;
-    --muted-foreground: 215 20.2% 75.1%;
+    --muted: 20 8% 14%;
+    --muted-foreground: 20 5% 55%;
 
-    --accent: 260 30% 50%; /* Purple accent */
-    --accent-foreground: 210 40% 98%;
+    --accent: 20 8% 14%;
+    --accent-foreground: 20 6% 90%;
 
-    --destructive: 0 62.8% 50.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 60 9% 98%;
 
-    --border: 232 26% 22%;
-    --input: 232 26% 22%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 20 8% 16%;
+    --input: 20 8% 16%;
+    --ring: 20 6% 50%;
 
-    /* Header with a slightly different shade for visual separation */
-    --header: 235 28% 18%;
-    --header-foreground: 210 40% 98%;
+    --success: 152 50% 45%;
+    --warning: 38 92% 55%;
 
-    /* Footer with the same color as header for consistency */
-    --footer: 235 28% 18%;
-    --footer-foreground: 210 40% 98%;
-
-    /* Body background - slightly darker than cards */
-    --body: 230 25% 8%;
-
-    /* Subtle gradients for cards and sections */
-    --gradient-start: rgba(67, 81, 117, 0.2);
-    --gradient-end: rgba(47, 53, 82, 0.1);
+    --sidebar: 20 10% 7%;
+    --sidebar-foreground: 20 6% 85%;
   }
 }
 
@@ -98,49 +88,91 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv01";
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight font-semibold;
   }
 }
 
-/* Modern card styling in dark mode */
-.dark .bg-card {
-  background-image: linear-gradient(to bottom right, hsl(var(--card)), hsl(232 26% 13%));
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-}
-
-/* Subtle hover effects for cards in dark mode */
-.dark .hover\:border-primary\/50:hover {
-  box-shadow: 0 0 0 1px hsl(var(--primary) / 30%), 0 5px 25px -5px hsl(var(--primary) / 10%);
-  border-color: hsl(var(--primary) / 50%);
-}
-
-/* Improved button styling in dark mode */
-.dark .btn-primary,
-.dark .btn-default {
-  background-image: linear-gradient(to right, hsl(var(--primary)), hsl(217 91% 55%));
-}
-
-/* Glowing effect for primary elements in dark mode */
-.dark .text-primary {
-  text-shadow: 0 0 10px hsl(var(--primary) / 20%);
-}
-
-/* Improved focus states in dark mode */
-.dark *:focus-visible {
-  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary) / 50%);
-}
-
-/* Subtle animations for hover states */
-@keyframes subtle-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 5px hsl(var(--primary) / 30%);
+@layer components {
+  /* ─── Clean card ─────────────────────────────────────────── */
+  .glass-card {
+    @apply bg-card border border-border rounded-xl;
   }
-  50% {
-    box-shadow: 0 0 15px hsl(var(--primary) / 40%);
+
+  /* ─── Dot pattern ───────────────────────────────────────── */
+  .dot-bg {
+    background-image: radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* ─── Grid background ──────────────────────────────────── */
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.3) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.3) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  /* ─── Role badges ───────────────────────────────────────── */
+  .badge-god {
+    @apply bg-stone-900 text-stone-100 dark:bg-stone-100 dark:text-stone-900;
+  }
+  .badge-super-admin {
+    @apply bg-stone-700 text-stone-100 dark:bg-stone-300 dark:text-stone-900;
+  }
+  .badge-admin {
+    @apply bg-stone-500 text-white dark:bg-stone-400 dark:text-stone-900;
+  }
+  .badge-user {
+    @apply bg-stone-200 text-stone-700 dark:bg-stone-600 dark:text-stone-100;
   }
 }
 
-.dark .animate-hover:hover {
-  animation: subtle-glow 2s ease-in-out infinite;
+/* ─── Scrollbar ────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/30;
+}
+
+/* ─── Animations ───────────────────────────────────────────── */
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out both;
+}
+.stagger-children > *:nth-child(3) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 225ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 375ms; }
+
+/* ─── Selection ────────────────────────────────────────────── */
+::selection {
+  background: hsl(var(--primary) / 0.2);
+  color: inherit;
 }

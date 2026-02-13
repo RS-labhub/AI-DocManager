@@ -1,0 +1,42 @@
+﻿# Security and Privacy
+
+R's DocManager is built with security at every layer.
+
+## Authentication
+
+- Passwords are hashed with bcrypt before storage
+- Sessions are managed with secure browser-side tokens
+- Custom authentication system with no third-party dependencies
+
+## API key encryption
+
+AI provider API keys use AES-256-GCM encryption:
+
+1. A random 12-byte initialization vector (IV) is generated per key
+2. The key is encrypted with AES-256-GCM using a server-side secret
+3. A 16-byte authentication tag verifies data integrity
+4. The encrypted key, IV, and auth tag are stored together
+5. Decryption happens in memory only when needed
+
+## Document passwords
+
+- Documents can be individually password-protected
+- Document passwords are hashed with bcrypt
+- Only users with the correct password can view the content
+- God-role users can bypass document passwords
+
+## Data isolation
+
+- Each organization has completely isolated data
+- Database queries enforce organization-level filtering
+- Cross-org access requires Super Admin or God role
+
+## File storage
+
+- Document files stored in secure Supabase storage buckets (50 MB limit)
+- User avatars stored separately (5 MB limit)
+- Access policies enforced at the database level
+
+## Audit trail
+
+All significant actions are logged: document changes, role changes, login events, and organization modifications.

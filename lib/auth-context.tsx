@@ -1,151 +1,173 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { useRouter, usePathname } from "next/navigation"
-import { useToast } from "@/components/ui/use-toast"
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import type { Profile, UserRole } from "@/lib/supabase/types";
 
-// Define user types
-export type UserRole = "admin" | "editor" | "viewer"
-
-export interface User {
-  id: string
-  username: string
-  name: string
-  role: UserRole
-}
-
-// Predefined users for demo purposes
-const USERS: Record<string, User & { password: string }> = {
-  admin: {
-    id: "admin-id",
-    username: "admin",
-    password: "2025DEVChallenge",
-    name: "Admin User",
-    role: "admin",
-  },
-  newuser: {
-    id: "user-id",
-    username: "newuser",
-    password: "2025DEVChallenge",
-    name: "Regular User",
-    role: "editor",
-  },
-  viewer: {
-    id: "viewer-id",
-    username: "viewer",
-    password: "2025DEVChallenge",
-    name: "Viewer User",
-    role: "viewer",
-  },
-}
+/* ─── Context types ─────────────────────────────────────────── */
 
 interface AuthContextType {
-  user: User | null
-  login: (username: string, password: string) => Promise<boolean>
-  logout: () => void
-  isLoading: boolean
+  user: Profile | null;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
+  logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+interface RegisterData {
+  email: string;
+  password: string;
+  full_name: string;
+  org_slug?: string;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/* ─── Public routes (no auth required) ──────────────────────── */
+
+const PUBLIC_ROUTES = ["/", "/login", "/register"];
+
+/* ─── Provider ──────────────────────────────────────────────── */
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const router = useRouter()
-  const pathname = usePathname()
-  const { toast } = useToast()
+  const [user, setUser] = useState<Profile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
+  const supabase = createClient();
 
-  // Check for existing session on mount
+  // Restore session on mount
   useEffect(() => {
-    const checkAuth = () => {
-      const storedUser = localStorage.getItem("user")
-      if (storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser)
-          setUser(parsedUser)
-        } catch (e) {
-          localStorage.removeItem("user")
+    const restore = async () => {
+      try {
+        const stored = localStorage.getItem("dms_user");
+        if (stored) {
+          const parsed = JSON.parse(stored) as Profile;
+          // Verify profile still exists in DB
+          const { data } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", parsed.id)
+            .eq("is_active", true)
+            .single();
+          if (data) {
+            setUser(data as Profile);
+            localStorage.setItem("dms_user", JSON.stringify(data));
+          } else {
+            localStorage.removeItem("dms_user");
+          }
         }
+      } catch {
+        localStorage.removeItem("dms_user");
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false)
-    }
+    };
+    restore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    // Use setTimeout to ensure this runs after hydration
-    setTimeout(checkAuth, 0)
-  }, [])
-
-  // Handle redirects based on auth state
+  // Route protection
   useEffect(() => {
-    if (isLoading) return
-
-    // If user is logged in and on login page, redirect to documents
-    if (user && (pathname === "/login" || pathname === "/")) {
-      router.push("/documents")
+    if (isLoading) return;
+    const isPublic = PUBLIC_ROUTES.includes(pathname);
+    if (user && (pathname === "/login" || pathname === "/register")) {
+      router.push("/dashboard");
     }
-
-    // If user is not logged in and trying to access protected routes
-    if (!user && pathname !== "/" && pathname !== "/login") {
-      router.push("/login")
+    if (!user && !isPublic) {
+      router.push("/login");
     }
-  }, [user, isLoading, pathname, router])
+  }, [user, isLoading, pathname, router]);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
-    setIsLoading(true)
+  /* ─── Login ─────────────────────────────────────────────── */
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500))
+  const login = useCallback(
+    async (email: string, password: string): Promise<boolean> => {
+      setIsLoading(true);
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
 
-    const matchedUser = USERS[username]
+        const data = await res.json();
 
-    if (matchedUser && matchedUser.password === password) {
-      // Remove password before storing in state
-      const { password: _, ...userWithoutPassword } = matchedUser
+        if (!res.ok || !data.user) {
+          setIsLoading(false);
+          return false;
+        }
 
-      // Update state and localStorage
-      setUser(userWithoutPassword)
-      localStorage.setItem("user", JSON.stringify(userWithoutPassword))
+        setUser(data.user);
+        localStorage.setItem("dms_user", JSON.stringify(data.user));
+        setIsLoading(false);
+        router.push("/dashboard");
+        return true;
+      } catch {
+        setIsLoading(false);
+        return false;
+      }
+    },
+    [router]
+  );
 
-      toast({
-        title: "Login successful",
-        description: `Welcome back, ${userWithoutPassword.name}!`,
-      })
+  /* ─── Register ──────────────────────────────────────────── */
 
-      setIsLoading(false)
+  const register = useCallback(
+    async (
+      regData: RegisterData
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(regData),
+        });
 
-      // Explicitly navigate to documents page
-      router.push("/documents")
-      return true
-    }
+        const result = await res.json();
 
-    toast({
-      variant: "destructive",
-      title: "Login failed",
-      description: "Invalid username or password",
-    })
+        if (!res.ok) {
+          return { success: false, error: result.error || "Registration failed" };
+        }
 
-    setIsLoading(false)
-    return false
-  }
+        setUser(result.user);
+        localStorage.setItem("dms_user", JSON.stringify(result.user));
+        router.push("/dashboard");
+        return { success: true };
+      } catch {
+        return { success: false, error: "Network error" };
+      }
+    },
+    [router]
+  );
 
-  const logout = () => {
-    setUser(null)
-    localStorage.removeItem("user")
+  /* ─── Logout ────────────────────────────────────────────── */
 
-    toast({
-      title: "Logged out",
-      description: "You have been successfully logged out",
-    })
+  const logout = useCallback(() => {
+    setUser(null);
+    localStorage.removeItem("dms_user");
+    router.push("/login");
+  }, [router]);
 
-    router.push("/login")
-  }
-
-  return <AuthContext.Provider value={{ user, login, logout, isLoading }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
 }
+
+export type { Profile, UserRole };
