@@ -254,6 +254,7 @@ export default function GodPanelPage() {
                               </div>
                               <span className="truncate">{s.org.name}</span>
                               <Badge variant="outline" className="text-[10px] font-mono hidden sm:inline-flex">{s.org.slug}</Badge>
+                              <Badge variant="secondary" className="text-[10px] font-mono hidden sm:inline-flex">Code: {s.org.org_code}</Badge>
                             </CardTitle>
                             <div className="flex items-center gap-3 shrink-0">
                               <div className="flex gap-3">

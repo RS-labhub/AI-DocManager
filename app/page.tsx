@@ -15,6 +15,8 @@ import {
   Zap,
   Eye,
   CheckCircle2,
+  Mail,
+  ShieldCheck,
 } from "lucide-react"
 import { Analytics } from "@vercel/analytics/react"
 
@@ -239,6 +241,66 @@ export default function Home() {
                   </ul>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Request Super Admin Access */}
+        <section className="py-16 md:py-24 border-t">
+          <div className="container mx-auto px-4">
+            <div className="rounded-xl border bg-card/50 backdrop-blur p-8 md:p-12 max-w-2xl mx-auto relative overflow-hidden">
+              <div className="absolute inset-0 dot-bg opacity-20" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-900 dark:bg-stone-100">
+                    <ShieldCheck className="h-5 w-5 text-stone-100 dark:text-stone-900" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg md:text-2xl font-bold tracking-tight">Need Super Admin Access?</h2>
+                    <p className="text-xs text-muted-foreground">Elevated privileges for platform management</p>
+                  </div>
+                </div>
+
+                <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+                  Super Admin access grants cross-organization capabilities, user approval authority, and advanced platform management features.
+                  To request Super Admin privileges, please reach out to the developer directly.
+                </p>
+
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Mail className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Contact the Developer</p>
+                      <a
+                        href="mailto:rs4101976@gmail.com?subject=Super%20Admin%20Access%20Request%20-%20AI%20DocManager"
+                        className="text-sm text-primary hover:underline"
+                      >
+                        rs4101976@gmail.com
+                      </a>
+                    </div>
+                  </div>
+                  <div className="border-t pt-3">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Please include your registered email address, organization name, and a brief reason for requesting elevated access.
+                      Requests are typically reviewed within 24–48 hours.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
+                  {[
+                    "Approve new members",
+                    "Cross-org access",
+                    "Promote to admin",
+                    "Export & audit logs",
+                  ].map((perk) => (
+                    <span key={perk} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                      {perk}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>

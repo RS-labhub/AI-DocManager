@@ -5,14 +5,36 @@ Get up and running with R's DocManager in minutes.
 ## Creating Your Account
 
 1. Click "Get Started" on the landing page
-2. Fill in your details: full name, email, password, and organization
-3. Click "Register" and you will be logged in automatically
+2. Fill in your details: full name, email, and password
+3. If you have an **Organization Code**, enter it in the Organization Code field
+4. Click "Create Account"
+
+### With an Organization Code
+
+If you enter an organization code during registration:
+- Your account is created with **pending** approval status
+- A Super Admin of that organization must approve your membership
+- You will see a confirmation message asking you to wait for approval
+- Once approved, you can log in and access the dashboard
+
+### Without an Organization Code
+
+If you register without an organization code:
+- Your account is created immediately and you are logged in
+- You won't belong to any organization yet
+- You can join an organization later from **Settings → Join Organization**
+- A banner on the dashboard will prompt you to join an organization
+
+### Becoming a Super Admin
+
+Super Admin access is granted by the platform administrator. To request Super Admin privileges, contact **rs4101976@gmail.com** with your account details.
 
 ## Logging In
 
 1. Go to the Sign In page
 2. Enter your email and password
-3. You will be redirected to your dashboard
+3. You will be redirected to your dashboard (if approved)
+4. If your membership is still pending, you'll see a pending approval page
 
 ## Your Dashboard
 

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,9 +19,9 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    const success = await login(email, password)
-    if (!success) {
-      setError("Invalid email or password")
+    const result = await login(email, password)
+    if (!result.success && !result.pending) {
+      setError(result.error || "Invalid email or password")
     }
   }
 
@@ -28,8 +29,8 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-[85vh] px-4">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="text-center mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-foreground text-background text-sm font-semibold mx-auto mb-4">
-            AI
+          <div className="mx-auto mb-4">
+            <Image src="/logo.png" alt="R's DocManager" width={140} height={32} className="h-8 w-auto object-contain mx-auto" priority />
           </div>
           <h1 className="text-xl font-semibold">Welcome back</h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to your account</p>

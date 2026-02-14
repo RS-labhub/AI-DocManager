@@ -4,10 +4,10 @@
 -- ══════════════════════════════════════════════════════════════
 
 -- Organizations
-INSERT INTO organizations (id, name, slug, description) VALUES
-  ('00000000-0000-0000-0000-000000000001', 'Acme Corporation',  'acme',    'The Acme Corporation — makers of everything'),
-  ('00000000-0000-0000-0000-000000000002', 'Globex Industries', 'globex',  'Globex — pushing the boundaries of innovation'),
-  ('00000000-0000-0000-0000-000000000003', 'Initech Labs',      'initech', 'Initech — enterprise solutions');
+INSERT INTO organizations (id, name, slug, org_code, description) VALUES
+  ('00000000-0000-0000-0000-000000000001', 'Acme Corporation',  'acme',    'ACME2026', 'The Acme Corporation — makers of everything'),
+  ('00000000-0000-0000-0000-000000000002', 'Globex Industries', 'globex',  'GLOBEX01', 'Globex — pushing the boundaries of innovation'),
+  ('00000000-0000-0000-0000-000000000003', 'Initech Labs',      'initech', 'INIT3CHX', 'Initech — enterprise solutions');
 
 -- Profiles  (passwords are managed at app level with bcrypt)
 -- God user (no org — sees everything)

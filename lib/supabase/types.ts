@@ -4,10 +4,13 @@
 
 export type UserRole = "god" | "super_admin" | "admin" | "user";
 
+export type ApprovalStatus = "pending" | "approved" | "rejected";
+
 export interface Organization {
   id: string;
   name: string;
   slug: string;
+  org_code: string;
   description: string | null;
   logo_url: string | null;
   created_at: string;
@@ -21,6 +24,7 @@ export interface Profile {
   avatar_url: string | null;
   role: UserRole;
   org_id: string | null;
+  approval_status: ApprovalStatus;
   is_active: boolean;
   created_at: string;
   updated_at: string;

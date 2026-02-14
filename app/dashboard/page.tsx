@@ -192,6 +192,28 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Join Organization Banner — only when user has no org */}
+      {!user.org_id && (
+        <Card className="border-dashed animate-fade-in-up">
+          <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 py-4 px-5">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">You&apos;re not part of an organization yet</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Join an organization with an org code to collaborate with your team.</p>
+              </div>
+            </div>
+            <Button asChild size="sm" className="h-8 gap-1.5 text-xs shrink-0">
+              <Link href="/dashboard/settings">
+                <Building2 className="h-3 w-3" /> Join Organization
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {statCards.map((card) => (
@@ -311,6 +333,13 @@ export default function DashboardPage() {
                 <Button variant="outline" className="w-full justify-start h-9 text-sm" asChild>
                   <Link href="/god">
                     <Building2 className="mr-2 h-3.5 w-3.5" /> God Panel
+                  </Link>
+                </Button>
+              )}
+              {!user.org_id && (
+                <Button variant="outline" className="w-full justify-start h-9 text-sm" asChild>
+                  <Link href="/dashboard/settings">
+                    <Building2 className="mr-2 h-3.5 w-3.5" /> Join Organization
                   </Link>
                 </Button>
               )}

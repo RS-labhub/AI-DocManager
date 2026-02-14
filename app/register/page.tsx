@@ -1,62 +1,91 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, ArrowRight, AlertCircle } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { Loader2, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react"
 
 export default function RegisterPage() {
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [orgSlug, setOrgSlug] = useState("")
-  const [orgs, setOrgs] = useState<{ slug: string; name: string }[]>([])
+  const [orgCode, setOrgCode] = useState("")
   const [error, setError] = useState("")
+  const [pendingMessage, setPendingMessage] = useState("")
   const [loading, setLoading] = useState(false)
   const { register } = useAuth()
-
-  useEffect(() => {
-    const loadOrgs = async () => {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from("organizations")
-        .select("slug, name")
-        .order("name")
-      if (data) setOrgs(data)
-    }
-    loadOrgs()
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setPendingMessage("")
     setLoading(true)
 
     const result = await register({
       email,
       password,
       full_name: fullName,
-      org_slug: orgSlug || undefined,
+      org_code: orgCode.trim().toUpperCase() || undefined,
     })
 
     if (!result.success) {
-      setError(result.error || "Registration failed")
+      if (result.pending) {
+        setPendingMessage(
+          result.error || "Account created! Your request to join the organization is pending approval from the Super Admin."
+        )
+      } else {
+        setError(result.error || "Registration failed")
+      }
     }
     setLoading(false)
+  }
+
+  // Show pending approval message
+  if (pendingMessage) {
+    return (
+      <div className="flex items-center justify-center min-h-[85vh] px-4 py-8">
+        <div className="w-full max-w-sm animate-fade-in">
+          <div className="text-center mb-8">
+            <div className="mx-auto mb-4">
+              <Image src="/logo.png" alt="R's DocManager" width={140} height={32} className="h-8 w-auto object-contain mx-auto" priority />
+            </div>
+            <h1 className="text-xl font-semibold">Approval Pending</h1>
+          </div>
+          <Card className="border shadow-sm">
+            <CardContent className="pt-6 pb-4 space-y-4">
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                <CheckCircle2 className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium mb-1">Account Created Successfully!</p>
+                  <p>{pendingMessage}</p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground text-center">
+                You can log in once a Super Admin approves your request.
+              </p>
+            </CardContent>
+            <CardFooter className="pb-6 flex flex-col gap-3">
+              <Button asChild variant="outline" className="w-full h-10">
+                <Link href="/login">Go to Login</Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="flex items-center justify-center min-h-[85vh] px-4 py-8">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="text-center mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-foreground text-background text-sm font-semibold mx-auto mb-4">
-            AI
+          <div className="mx-auto mb-4">
+            <Image src="/logo.png" alt="R's DocManager" width={140} height={32} className="h-8 w-auto object-contain mx-auto" priority />
           </div>
           <h1 className="text-xl font-semibold">Create your account</h1>
           <p className="text-sm text-muted-foreground mt-1">Join an organization and start managing documents</p>
@@ -112,21 +141,19 @@ export default function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="org" className="text-sm">Organization</Label>
-                <Select value={orgSlug} onValueChange={setOrgSlug}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Select an organization (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {orgs.map((org) => (
-                      <SelectItem key={org.slug} value={org.slug}>
-                        {org.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="orgCode" className="text-sm">Organization Code</Label>
+                <Input
+                  id="orgCode"
+                  value={orgCode}
+                  onChange={(e) => setOrgCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                  placeholder="e.g. ACME2026"
+                  maxLength={16}
+                  className="h-10 font-mono tracking-wider uppercase"
+                />
                 <p className="text-xs text-muted-foreground">
-                  You can join an organization now or later.
+                  Enter the alphanumeric code provided by your organization.
+                  Leave blank to create an account without an organization.
+                  A Super Admin must approve your membership before you can access the dashboard.
                 </p>
               </div>
             </CardContent>

@@ -110,11 +110,32 @@ async function main() {
   let deleted = 0;
   let failed = 0;
 
+  // Step 1: Delete auth.users FIRST — this cascades to profiles → credentials,
+  // documents, document_comments, document_passwords, ai_api_keys, ai_agents, ai_actions, audit_logs
+  console.log("  Step 1: Clearing Supabase Auth users (cascades to profiles & children)...\n");
+  try {
+    const authCountResult = await sql`SELECT COUNT(*) as cnt FROM auth.users`;
+    const authCount = parseInt(authCountResult[0]?.cnt || "0", 10);
+    await sql`DELETE FROM auth.users`;
+    console.log(`  ✅ auth.users: ${authCount} rows deleted (cascaded to profiles & all children)`);
+    deleted += authCount;
+  } catch (err: any) {
+    console.log(`  ⚠️  auth.users: ${err.message?.slice(0, 80) || "could not clear"}`);
+    console.log("  Falling back to deleting profiles directly...\n");
+  }
+
+  // Step 2: Clean up remaining tables (some may already be empty from cascade)
+  console.log("\n  Step 2: Cleaning up remaining tables...\n");
   for (const table of TABLES_IN_DELETE_ORDER) {
     try {
       // Get count before deletion
       const countResult = await sql.unsafe(`SELECT COUNT(*) as cnt FROM ${table}`);
       const count = parseInt(countResult[0]?.cnt || "0", 10);
+
+      if (count === 0) {
+        console.log(`  ✅ ${table}: already empty`);
+        continue;
+      }
 
       // Delete all rows
       await sql.unsafe(`DELETE FROM ${table}`);
@@ -128,8 +149,9 @@ async function main() {
 
   console.log("\n  ────────────────────────────────");
   console.log(`  Total deleted: ${deleted} rows`);
-  console.log(`  Tables cleared: ${TABLES_IN_DELETE_ORDER.length - failed}/${TABLES_IN_DELETE_ORDER.length}`);
+  console.log(`  Tables processed: ${TABLES_IN_DELETE_ORDER.length + 1}`);
   if (failed > 0) console.log(`  Failed: ${failed}`);
+
   console.log("");
 
   await sql.end();

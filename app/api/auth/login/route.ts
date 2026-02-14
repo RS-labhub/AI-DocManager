@@ -55,6 +55,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check approval status — pending/rejected users cannot log in to dashboard
+    if (profile.approval_status === "pending") {
+      return NextResponse.json(
+        { error: "Your organization membership is pending approval from a Super Admin. Please try again later.", approval_status: "pending", user: profile },
+        { status: 403 }
+      );
+    }
+
+    if (profile.approval_status === "rejected") {
+      return NextResponse.json(
+        { error: "Your organization membership request was rejected. Please contact the Super Admin for more information.", approval_status: "rejected" },
+        { status: 403 }
+      );
+    }
+
     // Log the login in audit
     await supabase.from("audit_logs").insert({
       user_id: profile.id,

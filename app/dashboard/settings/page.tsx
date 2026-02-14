@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
 import { Mail, Save, Loader2, Key, Check, LogOut, ArrowRight, Phone, Building2, FileText, User, Camera, Upload } from "lucide-react"
 import Link from "next/link"
+import { joinOrganization } from "@/app/actions/admin"
 
 export default function SettingsPage() {
   const { user, logout } = useAuth()
@@ -25,6 +26,9 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || "")
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [orgCode, setOrgCode] = useState("")
+  const [joiningOrg, setJoiningOrg] = useState(false)
+  const [joinMessage, setJoinMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   const handleSave = async () => {
     if (!user) return
@@ -54,18 +58,32 @@ export default function SettingsPage() {
     setUploadingAvatar(false)
   }
 
+  const handleJoinOrg = async () => {
+    if (!user || !orgCode.trim()) return
+    setJoiningOrg(true)
+    setJoinMessage(null)
+    const result = await joinOrganization(user.id, orgCode.trim())
+    if (result.success) {
+      setJoinMessage({ type: "success", text: `Request to join ${result.orgName} submitted! A Super Admin must approve your membership.` })
+      setOrgCode("")
+    } else {
+      setJoinMessage({ type: "error", text: result.error || "Failed to join organization." })
+    }
+    setJoiningOrg(false)
+  }
+
   if (!user) return null
   const roleInfo = getRoleInfo(user.role)
 
   return (
-    <div className="container mx-auto max-w-3xl py-8 px-4">
+    <div className={`container mx-auto py-8 px-4 ${!user.org_id ? "max-w-5xl" : "max-w-3xl"}`}>
       <div className="mb-8">
         <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">Account</p>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Manage your profile and preferences</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 gap-6 ${!user.org_id ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
         {/* Left: Avatar & Identity */}
         <div className="space-y-4">
           <Card>
@@ -175,6 +193,62 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Third Column: Join Organization — only shown when user has no org */}
+        {!user.org_id && (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Building2 className="h-3.5 w-3.5" /> Join Organization
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Enter the alphanumeric code provided by your organization to request membership. A Super Admin must approve your request.
+                </p>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="orgCode" className="text-xs">Organization Code</Label>
+                    <Input
+                      id="orgCode"
+                      value={orgCode}
+                      onChange={(e) => setOrgCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                      placeholder="e.g. ACME2026"
+                      maxLength={16}
+                      className="h-10 font-mono tracking-wider uppercase"
+                    />
+                  </div>
+                  {joinMessage && (
+                    <div className={`p-3 rounded-lg text-xs leading-relaxed ${
+                      joinMessage.type === "success"
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                        : "bg-destructive/10 text-destructive"
+                    }`}>
+                      {joinMessage.text}
+                    </div>
+                  )}
+                  <Button
+                    onClick={handleJoinOrg}
+                    disabled={joiningOrg || orgCode.trim().length < 4}
+                    className="w-full h-10 gap-2"
+                  >
+                    {joiningOrg ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                    {joiningOrg ? "Submitting..." : "Request to Join"}
+                  </Button>
+                </div>
+                <Separator />
+                <div className="text-[11px] text-muted-foreground space-y-1.5">
+                  <p className="font-medium text-foreground text-xs">How it works</p>
+                  <p>1. Get the org code from your organization admin</p>
+                  <p>2. Enter the code above and submit your request</p>
+                  <p>3. A Super Admin will review and approve your membership</p>
+                  <p>4. Once approved, you&apos;ll have access to all org resources</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )

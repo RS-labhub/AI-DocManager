@@ -17,8 +17,8 @@ import type { Profile, UserRole } from "@/lib/supabase/types";
 interface AuthContextType {
   user: Profile | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; pending?: boolean }>;
+  register: (data: RegisterData) => Promise<{ success: boolean; error?: string; pending?: boolean }>;
   logout: () => void;
 }
 
@@ -26,14 +26,14 @@ interface RegisterData {
   email: string;
   password: string;
   full_name: string;
-  org_slug?: string;
+  org_code?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /* ─── Public routes (no auth required) ──────────────────────── */
 
-const PUBLIC_ROUTES = ["/", "/login", "/register"];
+const PUBLIC_ROUTES = ["/", "/login", "/register", "/pending-approval"];
 
 /* ─── Provider ──────────────────────────────────────────────── */
 
@@ -59,8 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .eq("is_active", true)
             .single();
           if (data) {
-            setUser(data as Profile);
-            localStorage.setItem("dms_user", JSON.stringify(data));
+            // Block pending/rejected users
+            if (data.approval_status === "pending" || data.approval_status === "rejected") {
+              localStorage.removeItem("dms_user");
+            } else {
+              setUser(data as Profile);
+              localStorage.setItem("dms_user", JSON.stringify(data));
+            }
           } else {
             localStorage.removeItem("dms_user");
           }
@@ -90,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /* ─── Login ─────────────────────────────────────────────── */
 
   const login = useCallback(
-    async (email: string, password: string): Promise<boolean> => {
+    async (email: string, password: string): Promise<{ success: boolean; error?: string; pending?: boolean }> => {
       setIsLoading(true);
       try {
         const res = await fetch("/api/auth/login", {
@@ -101,19 +106,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const data = await res.json();
 
+        // Handle pending approval
+        if (res.status === 403 && data.approval_status === "pending") {
+          setIsLoading(false);
+          router.push("/pending-approval");
+          return { success: false, pending: true, error: data.error };
+        }
+
+        // Handle rejected
+        if (res.status === 403 && data.approval_status === "rejected") {
+          setIsLoading(false);
+          return { success: false, error: data.error };
+        }
+
         if (!res.ok || !data.user) {
           setIsLoading(false);
-          return false;
+          return { success: false, error: data.error || "Invalid email or password" };
         }
 
         setUser(data.user);
         localStorage.setItem("dms_user", JSON.stringify(data.user));
         setIsLoading(false);
         router.push("/dashboard");
-        return true;
+        return { success: true };
       } catch {
         setIsLoading(false);
-        return false;
+        return { success: false, error: "Network error" };
       }
     },
     [router]
@@ -124,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(
     async (
       regData: RegisterData
-    ): Promise<{ success: boolean; error?: string }> => {
+    ): Promise<{ success: boolean; error?: string; pending?: boolean }> => {
       try {
         const res = await fetch("/api/auth/register", {
           method: "POST",
@@ -136,6 +154,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (!res.ok) {
           return { success: false, error: result.error || "Registration failed" };
+        }
+
+        // If user is pending approval, don't log them in
+        if (result.pending) {
+          return {
+            success: false,
+            pending: true,
+            error: result.message || "Your request to join the organization is pending approval from the Super Admin.",
+          };
         }
 
         setUser(result.user);

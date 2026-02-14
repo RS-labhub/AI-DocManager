@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "db:setup": "bun ./scripts/setup-db.ts",
-    "db:seed": "echo 'Start the dev server first, then visit http://localhost:3000/api/seed'"
+    "db:verify": "bun ./scripts/setup-db.ts --verify",
+    "db:seed": "echo 'Start the dev server first, then visit http://localhost:3000/api/seed'",
+    "db:clear": "bun ./scripts/clear-data.ts",
+    "db:download": "bun ./scripts/download-data.ts"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.0.5",

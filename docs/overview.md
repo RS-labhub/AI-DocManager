@@ -1,5 +1,7 @@
 ﻿# Welcome to Radhika's DocManager
 
+![banner](/og.png)
+
 Radhika's DocManager (R's DocManager) is a secure, AI-powered document management platform built for teams and organizations. Upload, organize, and enhance your documents with built-in AI features while keeping your data safe with enterprise-grade security.
 
 ## What can you do?

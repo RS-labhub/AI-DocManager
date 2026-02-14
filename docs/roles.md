@@ -86,6 +86,7 @@ Cross-organization managers with elevated privileges.
 ### Other Capabilities
 - Promote users up to the Admin role
 - Manage users across organizations
+- **Approve or reject pending membership requests** from users who signed up with an organization code
 - Export user data (CSV/JSON)
 
 ## God (Weight: 100)
@@ -116,6 +117,7 @@ Platform-wide control with unique multi-org capabilities.
 - Full God Panel with platform overview
 - Access to all organizations and documents
 - Manage any user and assign any role
+- **View and regenerate organization codes**
 - Bypass document password protection
 - Platform-wide system settings
 - Create documents in multiple organizations simultaneously
@@ -126,6 +128,7 @@ Platform-wide control with unique multi-org capabilities.
 - Admins cannot change roles
 - Super Admins can promote users up to Admin
 - God users can assign any role including God
+- **Super Admin access must be requested by contacting rs4101976@gmail.com**
 
 ## Delete Permission Summary
 

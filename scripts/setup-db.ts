@@ -1,3 +1,18 @@
+/**
+ * AI DocManager — Unified Database Setup & Migration Script
+ *
+ * This script consolidates all database setup, migrations, and verification into one file.
+ * It runs supabase/schema.sql (which contains the complete schema including all migrations),
+ * verifies all tables, columns, enums, and displays organization codes & pending users.
+ *
+ * Usage:
+ *   bun ./scripts/setup-db.ts            — Full setup (schema + verify)
+ *   bun ./scripts/setup-db.ts --verify   — Only verify tables & columns (no schema execution)
+ *
+ * Requires .env with:
+ *   NEXT_PUBLIC_SUPABASE_URL
+ *   SUPABASE_DB_PASSWORD
+ */
 import * as fs from "fs";
 import * as path from "path";
 import postgres from "postgres";
@@ -7,7 +22,6 @@ import * as dotenv from "dotenv";
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const DB_PASSWORD = process.env.SUPABASE_DB_PASSWORD || "";
 
 if (!SUPABASE_URL || SUPABASE_URL.includes("YOUR_PROJECT")) {
@@ -20,27 +34,12 @@ if (!DB_PASSWORD) {
 }
 
 const PROJECT_REF = SUPABASE_URL.replace("https://", "").replace(".supabase.co", "");
+const VERIFY_ONLY = process.argv.includes("--verify");
 
-async function main() {
-  console.log("");
-  console.log("========================================================");
-  console.log("    AI DocManager - Supabase Database Setup");
-  console.log("========================================================");
-  console.log("  Project:  " + PROJECT_REF);
-  console.log("  URL:      " + SUPABASE_URL);
-
-  const root = process.cwd();
-  const schemaPath = path.join(root, "supabase", "schema.sql");
-
-  if (!fs.existsSync(schemaPath)) {
-    console.error("\n  ERROR: supabase/schema.sql not found. Run from project root.\n");
-    process.exit(1);
-  }
-
-  const schema = fs.readFileSync(schemaPath, "utf-8");
-  console.log("\n  Schema: supabase/schema.sql (" + schema.length + " bytes)");
-
-  // Try multiple connection formats across all Supabase regions
+// ---------------------------------------------------------------------------
+// Connection helper — tries direct + pooler across many AWS regions
+// ---------------------------------------------------------------------------
+async function connect(): Promise<ReturnType<typeof postgres>> {
   const regions = [
     "ap-south-1", "us-east-1", "us-west-1", "us-west-2",
     "eu-west-1", "eu-west-2", "eu-central-1",
@@ -48,34 +47,24 @@ async function main() {
     "sa-east-1", "ca-central-1",
   ];
 
-  const connectionCandidates: string[] = [
-    // Direct connection (no pooler)
+  const candidates: string[] = [
     `postgresql://postgres:${DB_PASSWORD}@db.${PROJECT_REF}.supabase.co:5432/postgres`,
   ];
-
-  // Pooler connections across all regions (session mode = port 5432, transaction mode = port 6543)
   for (const region of regions) {
-    connectionCandidates.push(
+    candidates.push(
       `postgresql://postgres.${PROJECT_REF}:${DB_PASSWORD}@aws-0-${region}.pooler.supabase.com:5432/postgres`,
       `postgresql://postgres.${PROJECT_REF}:${DB_PASSWORD}@aws-0-${region}.pooler.supabase.com:6543/postgres`,
     );
   }
 
-  console.log("\n--------------------------------------------------------");
-  console.log("  STEP 1 - Connecting to Supabase PostgreSQL");
-  console.log("--------------------------------------------------------");
-  console.log("  Trying " + connectionCandidates.length + " connection candidates...");
+  console.log("  Trying " + candidates.length + " connection candidates...");
 
-  let sql: ReturnType<typeof postgres> | null = null;
-
-  for (let i = 0; i < connectionCandidates.length; i++) {
-    const connStr = connectionCandidates[i];
-    // Show a short label for the connection being tried
+  for (const connStr of candidates) {
     const label = connStr
       .replace(`postgresql://postgres.${PROJECT_REF}:${DB_PASSWORD}@`, "pooler:")
       .replace(`postgresql://postgres:${DB_PASSWORD}@`, "direct:")
       .replace("/postgres", "");
-    
+
     const candidate = postgres(connStr, {
       ssl: "require",
       connect_timeout: 8,
@@ -87,99 +76,23 @@ async function main() {
       const result = await candidate`SELECT current_database(), current_user`;
       console.log("  [OK] Connected via: " + label);
       console.log("       User: " + result[0].current_user + " @ " + result[0].current_database);
-      sql = candidate;
-      break;
+      return candidate;
     } catch {
       await candidate.end().catch(() => {});
     }
   }
 
-  if (!sql) {
-    console.error("\n  [FAIL] Could not connect with any connection string.");
-    console.error("\n  Please run the schema manually:");
-    console.error("  1. Open: https://supabase.com/dashboard/project/" + PROJECT_REF + "/sql/new");
-    console.error("  2. Paste contents of supabase/schema.sql");
-    console.error("  3. Click Run\n");
-    process.exit(1);
-  }
-
-  console.log("\n--------------------------------------------------------");
-  console.log("  STEP 2 - Executing schema.sql");
-  console.log("--------------------------------------------------------");
-
-  try {
-    await sql.unsafe(schema);
-    console.log("  [OK] Full schema executed successfully");
-  } catch (err: any) {
-    if (err.message && err.message.includes("already exists")) {
-      console.log("  [OK] Schema objects already exist (safe to continue)");
-    } else {
-      console.error("  [FAIL] Schema execution error: " + err.message);
-      console.error("\n  Trying statement-by-statement...\n");
-      await runStatements(sql, schema);
-    }
-  }
-
-  console.log("\n--------------------------------------------------------");
-  console.log("  STEP 3 - Verifying tables");
-  console.log("--------------------------------------------------------");
-
-  const tables = [
-    "organizations", "profiles", "credentials", "documents",
-    "ai_api_keys", "ai_agents", "ai_actions", "audit_logs",
-    "document_comments", "document_passwords",
-  ];
-
-  let allOk = true;
-  for (const t of tables) {
-    try {
-      const check = await sql`
-        SELECT EXISTS (
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_schema = 'public' AND table_name = ${t}
-        ) as exists
-      `;
-      if (check[0].exists) {
-        console.log("  [OK]   " + t);
-      } else {
-        console.log("  [FAIL] " + t + " - not found");
-        allOk = false;
-      }
-    } catch (err: any) {
-      console.log("  [FAIL] " + t + " - " + err.message);
-      allOk = false;
-    }
-  }
-
-  if (!allOk) {
-    console.log("\n  Some tables are missing. Check for errors above.");
-  }
-
-  // Check for enum type
-  try {
-    const enumCheck = await sql`
-      SELECT EXISTS (
-        SELECT 1 FROM pg_type WHERE typname = 'user_role'
-      ) as exists
-    `;
-    console.log("  [" + (enumCheck[0].exists ? "OK" : "FAIL") + "]   user_role enum type");
-  } catch {}
-
-  console.log("\n--------------------------------------------------------");
-  console.log("  STEP 4 - Seed the database");
-  console.log("--------------------------------------------------------");
-  console.log("  Seed via the API for bcrypt passwords:");
-  console.log("    1. bun dev");
-  console.log("    2. Open http://localhost:3000/api/seed");
-  console.log("    3. Default password: Password123!");
-
-  console.log("\n========================================================");
-  console.log("  Setup complete!");
-  console.log("========================================================\n");
-
-  await sql.end();
+  console.error("\n  [FAIL] Could not connect with any connection string.");
+  console.error("\n  Please run the schema manually:");
+  console.error("  1. Open: https://supabase.com/dashboard/project/" + PROJECT_REF + "/sql/new");
+  console.error("  2. Paste contents of supabase/schema.sql");
+  console.error("  3. Click Run\n");
+  process.exit(1);
 }
 
+// ---------------------------------------------------------------------------
+// SQL splitter — handles $$ blocks for CREATE FUNCTION etc.
+// ---------------------------------------------------------------------------
 function splitSQL(sqlText: string): string[] {
   const stmts: string[] = [];
   let buf = "";
@@ -224,6 +137,195 @@ async function runStatements(sql: ReturnType<typeof postgres>, schema: string) {
     }
   }
   console.log("\n  Result: " + ok + " ok, " + skipped + " skipped, " + failed + " failed");
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+async function main() {
+  console.log("");
+  console.log("========================================================");
+  console.log("    AI DocManager — Database Setup & Verification");
+  console.log("========================================================");
+  console.log("  Project:  " + PROJECT_REF);
+  console.log("  URL:      " + SUPABASE_URL);
+  console.log("  Mode:     " + (VERIFY_ONLY ? "Verify only" : "Full setup"));
+
+  // ── STEP 1 — Connect ────────────────────────────────────────────────
+  console.log("\n--------------------------------------------------------");
+  console.log("  STEP 1 — Connecting to Supabase PostgreSQL");
+  console.log("--------------------------------------------------------");
+
+  const sql = await connect();
+
+  // ── STEP 2 — Execute schema.sql (unless --verify) ───────────────────
+  if (!VERIFY_ONLY) {
+    console.log("\n--------------------------------------------------------");
+    console.log("  STEP 2 — Executing schema.sql");
+    console.log("--------------------------------------------------------");
+
+    const root = process.cwd();
+    const schemaPath = path.join(root, "supabase", "schema.sql");
+
+    if (!fs.existsSync(schemaPath)) {
+      console.error("\n  ERROR: supabase/schema.sql not found. Run from project root.\n");
+      await sql.end();
+      process.exit(1);
+    }
+
+    const schema = fs.readFileSync(schemaPath, "utf-8");
+    console.log("  Schema: supabase/schema.sql (" + schema.length + " bytes)");
+
+    try {
+      await sql.unsafe(schema);
+      console.log("  [OK] Full schema executed successfully");
+    } catch (err: any) {
+      if (err.message && err.message.includes("already exists")) {
+        console.log("  [OK] Schema objects already exist (safe to continue)");
+      } else {
+        console.error("  [FAIL] Schema execution error: " + err.message);
+        console.error("\n  Trying statement-by-statement...\n");
+        await runStatements(sql, schema);
+      }
+    }
+  } else {
+    console.log("\n  Skipping schema execution (--verify mode)");
+  }
+
+  // ── STEP 3 — Verify tables ──────────────────────────────────────────
+  console.log("\n--------------------------------------------------------");
+  console.log("  STEP 3 — Verifying tables");
+  console.log("--------------------------------------------------------");
+
+  const tables = [
+    "organizations", "profiles", "credentials", "documents",
+    "ai_api_keys", "ai_agents", "ai_actions", "audit_logs",
+    "document_comments", "document_passwords",
+  ];
+
+  let allTablesOk = true;
+  for (const t of tables) {
+    try {
+      const check = await sql`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = ${t}
+      ) as exists`;
+      if (check[0].exists) {
+        console.log("  [OK]   " + t);
+      } else {
+        console.log("  [FAIL] " + t + " — not found");
+        allTablesOk = false;
+      }
+    } catch (err: any) {
+      console.log("  [FAIL] " + t + " — " + err.message);
+      allTablesOk = false;
+    }
+  }
+
+  if (!allTablesOk) {
+    console.log("\n  ⚠️  Some tables are missing. Check for errors above.");
+  }
+
+  // ── STEP 4 — Verify enum types ─────────────────────────────────────
+  console.log("\n--------------------------------------------------------");
+  console.log("  STEP 4 — Verifying enum types");
+  console.log("--------------------------------------------------------");
+
+  const enums = ["user_role", "approval_status"];
+  for (const e of enums) {
+    try {
+      const check = await sql`SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = ${e}) as exists`;
+      console.log("  [" + (check[0].exists ? "OK" : "FAIL") + "]   " + e);
+    } catch {
+      console.log("  [FAIL] " + e);
+    }
+  }
+
+  // ── STEP 5 — Verify key columns ────────────────────────────────────
+  console.log("\n--------------------------------------------------------");
+  console.log("  STEP 5 — Verifying key columns");
+  console.log("--------------------------------------------------------");
+
+  const columnChecks = [
+    { table: "organizations", column: "org_code" },
+    { table: "profiles", column: "approval_status" },
+    { table: "documents", column: "description" },
+    { table: "documents", column: "file_url" },
+    { table: "documents", column: "file_size" },
+    { table: "documents", column: "version" },
+    { table: "documents", column: "status" },
+    { table: "documents", column: "classification" },
+    { table: "documents", column: "access_level" },
+    { table: "documents", column: "is_password_protected" },
+    { table: "documents", column: "reviewers" },
+    { table: "documents", column: "referenced_docs" },
+  ];
+
+  for (const { table, column } of columnChecks) {
+    try {
+      const check = await sql`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = ${table} AND column_name = ${column}
+        ) as exists
+      `;
+      console.log("  [" + (check[0].exists ? "OK" : "FAIL") + "]   " + table + "." + column);
+    } catch {
+      console.log("  [FAIL] " + table + "." + column);
+    }
+  }
+
+  // ── STEP 6 — Show organization codes ───────────────────────────────
+  console.log("\n--------------------------------------------------------");
+  console.log("  STEP 6 — Organization Codes");
+  console.log("--------------------------------------------------------");
+
+  try {
+    const orgs = await sql`SELECT name, slug, org_code FROM organizations ORDER BY name`;
+    if (orgs.length === 0) {
+      console.log("  No organizations found. Seed the database first.");
+    } else {
+      for (const org of orgs) {
+        console.log(`  • ${org.name} (${org.slug}): ${org.org_code}`);
+      }
+    }
+  } catch (err: any) {
+    console.log("  Could not list orgs: " + err.message);
+  }
+
+  // ── STEP 7 — Show pending users ────────────────────────────────────
+  console.log("\n--------------------------------------------------------");
+  console.log("  STEP 7 — Pending Users");
+  console.log("--------------------------------------------------------");
+
+  try {
+    const pending = await sql`SELECT email, full_name, approval_status FROM profiles WHERE approval_status = 'pending'`;
+    if (pending.length === 0) {
+      console.log("  No pending users.");
+    } else {
+      for (const u of pending) {
+        console.log(`  • ${u.full_name} (${u.email}) — ${u.approval_status}`);
+      }
+    }
+  } catch (err: any) {
+    console.log("  Could not list pending users: " + err.message);
+  }
+
+  // ── STEP 8 — Seed instructions ─────────────────────────────────────
+  console.log("\n--------------------------------------------------------");
+  console.log("  STEP 8 — Seed the database");
+  console.log("--------------------------------------------------------");
+  console.log("  Seed via the API for bcrypt passwords:");
+  console.log("    1. bun dev");
+  console.log("    2. Open http://localhost:3000/api/seed");
+  console.log("    3. Default password: Password123!");
+
+  console.log("\n========================================================");
+  console.log("  ✅ Setup & verification complete!");
+  console.log("========================================================\n");
+
+  await sql.end();
 }
 
 main().catch((err) => {

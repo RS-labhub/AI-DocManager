@@ -31,9 +31,9 @@ export async function GET() {
 
     // ─── Organizations ─────────────────────────────────────
     const orgs = [
-      { id: "00000000-0000-0000-0000-000000000001", name: "Acme Corporation", slug: "acme", description: "The Acme Corporation — makers of everything" },
-      { id: "00000000-0000-0000-0000-000000000002", name: "Globex Industries", slug: "globex", description: "Globex — pushing the boundaries of innovation" },
-      { id: "00000000-0000-0000-0000-000000000003", name: "Initech Labs", slug: "initech", description: "Initech — enterprise solutions" },
+      { id: "00000000-0000-0000-0000-000000000001", name: "Acme Corporation", slug: "acme", org_code: "ACME2026", description: "The Acme Corporation — makers of everything" },
+      { id: "00000000-0000-0000-0000-000000000002", name: "Globex Industries", slug: "globex", org_code: "GLOBEX01", description: "Globex — pushing the boundaries of innovation" },
+      { id: "00000000-0000-0000-0000-000000000003", name: "Initech Labs", slug: "initech", org_code: "INIT3CHX", description: "Initech — enterprise solutions" },
     ];
 
     const { error: orgErr } = await supabase.from("organizations").insert(orgs);
@@ -52,6 +52,18 @@ export async function GET() {
       { id: "40000000-0000-0000-0000-000000000003", email: "user1@globex.com", full_name: "Hank Wilson", role: "user" as const, org_id: "00000000-0000-0000-0000-000000000002", is_active: true },
       { id: "40000000-0000-0000-0000-000000000004", email: "user1@initech.com", full_name: "Ivy Nguyen", role: "user" as const, org_id: "00000000-0000-0000-0000-000000000003", is_active: true },
     ];
+
+    // Create Supabase Auth users first (profiles.id references auth.users.id)
+    for (const p of profiles) {
+      const { error: authErr } = await supabase.auth.admin.createUser({
+        id: p.id,
+        email: p.email,
+        password: DEFAULT_PASSWORD,
+        email_confirm: true,
+        user_metadata: { full_name: p.full_name },
+      });
+      if (authErr) throw new Error(`Auth user creation failed for ${p.email}: ${authErr.message}`);
+    }
 
     const { error: profileErr } = await supabase.from("profiles").insert(profiles);
     if (profileErr) throw new Error(`Profile insert failed: ${profileErr.message}`);
