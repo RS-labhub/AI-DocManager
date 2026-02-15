@@ -192,8 +192,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Join Organization Banner — only when user has no org */}
-      {!user.org_id && (
+      {/* Join Organization Banner — only when user has no org and is not admin+ */}
+      {!user.org_id && !isAdminPlus && (
         <Card className="border-dashed animate-fade-in-up">
           <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 py-4 px-5">
             <div className="flex items-center gap-3">
@@ -336,7 +336,7 @@ export default function DashboardPage() {
                   </Link>
                 </Button>
               )}
-              {!user.org_id && (
+              {!user.org_id && !isAdminPlus && (
                 <Button variant="outline" className="w-full justify-start h-9 text-sm" asChild>
                   <Link href="/dashboard/settings">
                     <Building2 className="mr-2 h-3.5 w-3.5" /> Join Organization

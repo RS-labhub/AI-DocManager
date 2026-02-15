@@ -105,10 +105,10 @@ export default function Navbar() {
 
                   <Separator className="my-2" />
 
-                  <Link href="/dashboard/docs" onClick={() => setMobileOpen(false)}
+                  <Link href="/docs" onClick={() => setMobileOpen(false)}
                     className={cn(
                       "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors",
-                      isActive("/dashboard/docs")
+                      isActive("/docs")
                         ? "bg-primary/10 text-primary font-medium"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                     )}>
@@ -195,13 +195,11 @@ export default function Navbar() {
 
         {/* Right side */}
         <div className="flex items-center gap-1.5">
-          {user && (
-            <Button asChild variant="ghost" size="sm" className="hidden sm:flex h-9 gap-1.5 text-xs">
-              <Link href="/dashboard/docs">
-                <BookOpen className="h-3.5 w-3.5" /> Docs
-              </Link>
-            </Button>
-          )}
+          <Button asChild variant="ghost" size="sm" className="hidden sm:flex h-9 gap-1.5 text-xs">
+            <Link href="/docs">
+              <BookOpen className="h-3.5 w-3.5" /> Docs
+            </Link>
+          </Button>
           {user && (
             <Button asChild size="sm" className="hidden sm:flex h-9 gap-1.5 text-xs">
               <Link href="/dashboard/documents/new">

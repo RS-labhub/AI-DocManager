@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";

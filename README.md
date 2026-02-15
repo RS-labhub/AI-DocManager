@@ -39,7 +39,9 @@ A secure, AI-powered document management platform with multi-organization suppor
 
 ## Documentation
 
-Full documentation is available in the `/docs` folder and at the `/dashboard/docs` route when running the app.
+Full documentation is available in the `/docs` folder.
+
+Find here: https://radhika-docmanager.vercel.app/docs
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture, database schema, and detailed role/permission documentation.
 

@@ -33,7 +33,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /* ─── Public routes (no auth required) ──────────────────────── */
 
-const PUBLIC_ROUTES = ["/", "/login", "/register", "/pending-approval"];
+const PUBLIC_ROUTES = ["/", "/login", "/register", "/pending-approval", "/docs"];
 
 /* ─── Provider ──────────────────────────────────────────────── */
 
