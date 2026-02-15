@@ -36,8 +36,9 @@ AI provider API keys use AES-256-GCM encryption:
 ## Data isolation
 
 - Each organization has completely isolated data
-- Database queries enforce organization-level filtering
-- Cross-org access requires Super Admin or God role
+- Database queries enforce organization-level filtering for all roles except God
+- Super Admin, Admin, and User roles can only access data within their organization
+- Only God role has cross-organization access
 
 ## File storage
 

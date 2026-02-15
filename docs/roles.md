@@ -8,10 +8,12 @@ R's DocManager uses a 4-tier role hierarchy. Each role has specific capabilities
 |------|--------|-------|
 | User | 10 | Own documents within their organization |
 | Admin | 50 | All documents and users in their organization |
-| Super Admin | 75 | Cross-organization visibility and management |
+| Super Admin | 75 | All documents and users in their organization with elevated privileges |
 | God | 100 | Full platform control across all organizations |
 
 A higher-weighted role "outranks" lower roles. This determines who can delete whose documents and who can manage whom.
+
+**Important:** Only God has cross-organization access. Super Admin, Admin, and User roles are all scoped to their organization.
 
 ## User (Weight: 10)
 
@@ -66,7 +68,7 @@ Organization administrators with expanded access.
 
 ## Super Admin (Weight: 75)
 
-Cross-organization managers with elevated privileges.
+Organization administrators with elevated privileges for user management and approvals.
 
 ### Document Creation
 - Same as User
@@ -75,7 +77,8 @@ Cross-organization managers with elevated privileges.
 
 ### Document Access
 - View all documents within their organization
-- Cross-organization visibility for management
+- All tabs show org-wide documents (not just their own)
+- **Cannot see documents from other organizations**
 
 ### Document Deletion
 - Delete their own documents
@@ -84,10 +87,17 @@ Cross-organization managers with elevated privileges.
 - Cannot delete God documents or other Super Admin documents
 
 ### Other Capabilities
-- Promote users up to the Admin role
-- Manage users across organizations
-- **Approve or reject pending membership requests** from users who signed up with an organization code
+- Promote users up to the Admin role within their organization
+- Manage all users within their organization
+- **Approve or reject pending membership requests** for their organization
+- Access system settings
+- View organization-level audit logs
 - Export user data (CSV/JSON)
+
+### Limitations
+- **Cannot access other organizations' data**
+- Can only manage users within their own organization
+- Cannot assign God role or promote users to Super Admin
 
 ## God (Weight: 100)
 
@@ -115,12 +125,13 @@ Platform-wide control with unique multi-org capabilities.
 
 ### Other Capabilities
 - Full God Panel with platform overview
-- Access to all organizations and documents
-- Manage any user and assign any role
+- **Access to all organizations and their documents** (only role with cross-org access)
+- Manage any user and assign any role including God
 - **View and regenerate organization codes**
 - Bypass document password protection
-- Platform-wide system settings
+- Platform-wide system settings and audit logs
 - Create documents in multiple organizations simultaneously
+- Can switch between organizations and view any org's data
 
 ## Role Assignment
 

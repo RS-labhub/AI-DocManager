@@ -1,141 +1,91 @@
-﻿# Working with Documents# Working with Documents
+﻿# Working with Documents
 
+Documents are the core of R's DocManager. This guide covers everything from creation to access control.
 
+## Creating documents
 
-Documents are the core of R's DocManager. This guide covers everything from creation to access control.Documents are the core of R's DocManager.
+### Upload mode
 
+Drag and drop a file or click to browse. Supported formats:
 
-
-## Creating Documents## Creating documents
-
-
-
-### Upload Mode### Upload mode
-
-
-
-Drag and drop a file or click to browse. Supported formats:Drag and drop a file or click to browse. Supported formats:
-
-
-
-- PDF (embedded iframe viewer)- **PDF** with full text extraction
-
-- DOCX/DOC (automatic text extraction via mammoth)- **DOCX** (Microsoft Word)
-
-- TXT (plain text, direct display)- **TXT** (plain text)
-
-- Markdown (.md files, formatted preview)- **CSV** (tabular data)
-
-- HTML, JSON, CSV, RTF, ODT (text extraction)- **Markdown** (.md files)
-
-- XLSX, PPTX (upload and download only)
+- **PDF** with full text extraction
+- **DOCX** (Microsoft Word)
+- **TXT** (plain text)
+- **CSV** (tabular data)
+- **Markdown** (.md files)
+- **HTML, JSON, RTF, ODT** (text extraction)
+- **XLSX, PPTX** (upload and download only)
 
 Maximum file size is 50 MB.
-
-Maximum file size is 50 MB.
-
-### Write mode
 
 When you upload a parseable file (DOCX, TXT, MD, HTML, JSON, RTF, ODT), the text content is automatically extracted and stored. This enables full-text search, AI actions, and formatted viewing.
 
+### Write mode
+
 Use the built-in rich text editor with:
 
-### Write Mode
-
 - Formatting toolbar: headings, bold, italic, code, quotes, lists, links, images, tables
-
-Use the built-in rich text editor with:- Three view modes: Write, Preview, or Split
-
+- Three view modes: Write, Preview, or Split
 - Live preview with character, word, and line counts
+- RAG Import: import text from DOCX, TXT, MD, HTML, JSON, RTF, or ODT files directly into the editor
 
-- Formatting toolbar: headings, bold, italic, code, quotes, lists, links, images, tables
+## Document properties
 
-- Three view modes: Write, Preview, or Split### Document properties
-
-- Live preview with character, word, and line counts
-
-- RAG Import: import text from DOCX, TXT, MD, HTML, JSON, RTF, or ODT files directly into the editor| Property | Options | Description |
-
+| Property | Options | Description |
 |----------|---------|-------------|
-
-## Document Properties| Title | Free text | The document name |
-
-| Tags | Comma-separated | Keywords for organization |
-
-| Property | Options | Description || Status | Draft, Published, Archived | Lifecycle stage |
-
-|----------|---------|-------------|| Classification | Public, Internal, Confidential, Top Secret | Access level |
-
-| Title | Free text | Required. The document name || Password | Optional | Password-protect the document |
-
+| Title | Free text | Required. The document name |
 | Description | Free text | Optional brief description |
-
-| Tags | Free-form labels | Keywords for search and organization |## Viewing documents
-
+| Tags | Free-form labels | Keywords for search and organization |
 | Status | Draft, Under Review, Published, Archived | Controls visibility in listing tabs |
-
-| Classification | Organization, Public, Internal, Confidential, General | Who can see the document |Click any document to see its detail page with:
-
+| Classification | Organization, Public, Internal, Confidential, General | Who can see the document |
 | Access Level | View Only, Comment, Edit, Full Access | What viewers can do with the document |
+| Password | Optional 9-digit code | Locks the document from viewing |
+| Reviewers | Admin/Super Admin users | Required when status is Under Review |
+| References | Link to other documents | Cross-reference related documents |
 
-| Password | Optional 9-digit code | Locks the document from viewing |- Full content rendered with markdown formatting
+## Viewing documents
 
-| Reviewers | Admin/Super Admin users | Required when status is Under Review |- Metadata: creation date, author, organization, classification, tags
+Click any document to see its detail page with:
 
-| References | Link to other documents | Cross-reference related documents |- Reference number (DOC-XXXXX)
-
+- Full content rendered with markdown formatting
+- Metadata: creation date, author, organization, classification, tags
+- Reference number (DOC-XXXXX)
 - AI action buttons
+- Comment thread
 
-## Classification Explained- Comment thread
+## Classification Explained
 
-
-
-| Classification | Visibility |## Password-protected documents
-
+| Classification | Visibility |
 |---------------|------------|
-
-| Organization | Only visible to members of the same organization |- A lock icon appears on protected document cards
-
-| Public | Visible to everyone, including other organizations |- Enter the correct password to view content
-
-| Internal | Restricted to internal team use |- God-role users bypass password protection
-
+| Organization | Only visible to members of the same organization |
+| Public | Visible to everyone, including other organizations |
+| Internal | Restricted to internal team use |
 | Confidential | Highly restricted access |
+| General | Default, no special restrictions |
 
-| General | Default, no special restrictions |## AI actions
+### Default Classification by Role
 
+- God: defaults to Public
+- Super Admin: defaults to Organization
+- Admin: defaults to Organization
+- User: defaults to Organization
 
-
-### Default Classification by Role| Action | What it does |
-
-|--------|-------------|
-
-- God: defaults to Public| Summarize | Concise summary of the document |
-
-- Super Admin: defaults to Organization| Analyze Sentiment | Determines tone and sentiment |
-
-- Admin: defaults to Organization| Extract Key Points | Lists the most important points |
-
-- User: defaults to Organization| Improve Writing | Suggestions for clarity and style |
-
-| Translate | Translate to another language |
-
-## Access Levels| Generate Q&A | Creates questions and answers |
-
-| Custom Prompt | Run any custom instruction |
+## Access Levels
 
 | Level | Can View | Can Comment | Can Edit |
-
-|-------|----------|-------------|----------|## Comments
-
+|-------|----------|-------------|----------|
 | View Only | Yes | No | No |
-
-| Comment | Yes | Yes | No |Below each document is a comment section where organization members can discuss the content.
-
+| Comment | Yes | Yes | No |
 | Edit | Yes | Yes | Yes (non-uploaded docs) |
 | Full Access | Yes | Yes | Yes |
 
 When a document is set to View Only, the Comments button is hidden entirely.
+
+## Password-protected documents
+
+- A lock icon appears on protected document cards
+- Enter the correct password to view content
+- God-role users bypass password protection
 
 ## Document Status and Tabs
 

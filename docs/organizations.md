@@ -61,7 +61,7 @@ To become a Super Admin, contact the platform administrator at **rs4101976@gmail
 
 ## Multi-org features (God role)
 
-God-role users can create documents in specific organizations or all organizations at once. Super Admin and God users can view documents and users across all organizations.
+God-role users can create documents in specific organizations or all organizations at once. **Only God users** can view documents and users across all organizations. Super Admin, Admin, and User roles are all scoped to their own organization.
 
 ## Organization management
 

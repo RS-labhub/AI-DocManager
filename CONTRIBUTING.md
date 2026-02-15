@@ -94,8 +94,8 @@ bun run build
 
 | Role | Weight | Description |
 |------|--------|-------------|
-| God | 100 | Platform-wide control, all organizations |
-| Super Admin | 75 | Cross-org visibility, promotes up to Admin |
+| God | 100 | Platform-wide control, all organizations (only role with cross-org access) |
+| Super Admin | 75 | Org-level elevated privileges, approves memberships |
 | Admin | 50 | Org-level user and document management |
 | User | 10 | Own documents only |
 
@@ -219,16 +219,16 @@ After seeding (visit /api/seed):
 
 | Email | Role | Organization |
 |-------|------|-------------|
-| god@docmanager.ai | God | Platform-wide |
-| super.admin@docmanager.ai | Super Admin | Platform-wide |
+| god@system.local | God | Platform-wide |
+| superadmin@acme.com | Super Admin | Acme Corp |
+| superadmin@globex.com | Super Admin | Globex Industries |
 | admin@acme.com | Admin | Acme Corp |
-| admin@globex.com | Admin | Globex Inc |
-| admin@initech.com | Admin | Initech LLC |
-| alice@acme.com | User | Acme Corp |
-| bob@globex.com | User | Globex Inc |
-| carol@initech.com | User | Initech LLC |
-| dave@acme.com | User | Acme Corp |
-| eve@globex.com | User | Globex Inc |
+| admin@globex.com | Admin | Globex Industries |
+| admin@initech.com | Admin | Initech Labs |
+| user1@acme.com | User | Acme Corp |
+| user2@acme.com | User | Acme Corp |
+| user1@globex.com | User | Globex Industries |
+| user1@initech.com | User | Initech Labs |
 
 Password for all accounts: `Password123!`
 
