@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client"
 import type { Document, DocumentComment } from "@/lib/supabase/types"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import remarkBreaks from "remark-breaks"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -346,9 +347,9 @@ export default function DocumentDetailPage() {
     )
   }
 
-  const canEdit = isAtLeast(user.role, "admin") || doc.owner_id === user.id
   const isOwner = doc.owner_id === user.id
   const isGodUser = user.role === "god"
+  const canEdit = isOwner || isGodUser || (isAtLeast(user.role, "admin") && !["view_only", "comment"].includes(doc.access_level))
   const isLocked = doc.is_password_protected && !isUnlocked && !isOwner && !isGodUser
   const canComment = (doc.access_level || "view_only") !== "view_only" || isOwner || isGodUser
 
@@ -565,7 +566,86 @@ export default function DocumentDetailPage() {
                   )}
                   {doc.content ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none max-h-[60vh] overflow-auto rounded-lg p-4 bg-muted/30 border border-border leading-relaxed prose-headings:font-semibold prose-headings:tracking-tight prose-p:text-sm prose-p:leading-relaxed prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-mono prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-a:text-primary prose-a:underline prose-img:rounded-lg prose-table:border prose-th:border prose-th:px-3 prose-th:py-1.5 prose-td:border prose-td:px-3 prose-td:py-1.5">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm, remarkBreaks]}
+                        components={{
+                          code({ node, className, children, ...props }: any) {
+                            const match = /language-(\w+)/.exec(className || "")
+                            const isInline = !match && !className
+                            if (isInline) {
+                              return <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>
+                            }
+                            return (
+                              <pre className="bg-muted/50 border rounded-lg p-4 overflow-x-auto">
+                                <code className={`text-xs font-mono ${className || ""}`} {...props}>{children}</code>
+                              </pre>
+                            )
+                          },
+                          table({ children }: any) {
+                            return <div className="overflow-x-auto my-4 border rounded-lg"><table className="w-full text-sm border-collapse">{children}</table></div>
+                          },
+                          th({ children, ...props }: any) {
+                            return <th className="border-b bg-muted/50 px-4 py-2 text-left font-medium" {...props}>{children}</th>
+                          },
+                          td({ children, ...props }: any) {
+                            return <td className="border-b px-4 py-2" {...props}>{children}</td>
+                          },
+                          p({ children, ...props }: any) {
+                            return <p className="whitespace-pre-wrap !mt-1 !mb-4 !leading-normal" {...props}>{children}</p>
+                          },
+                          blockquote({ children, ...props }: any) {
+                            return <blockquote className="border-l-4 border-primary pl-4 italic my-4 bg-muted/30 py-1 pr-2" {...props}>{children}</blockquote>
+                          },
+                          h1({ children, ...props }: any) {
+                            return <h1 className="!text-3xl !font-bold !mt-6 !mb-3 !pb-0 !leading-tight" {...props}>{children}</h1>
+                          },
+                          h2({ children, ...props }: any) {
+                            return <h2 className="!text-2xl !font-bold !mt-5 !mb-3 !pb-0 !leading-tight" {...props}>{children}</h2>
+                          },
+                          h3({ children, ...props }: any) {
+                            return <h3 className="!text-xl !font-semibold !mt-4 !mb-2 !pb-0 !leading-tight" {...props}>{children}</h3>
+                          },
+                          h4({ children, ...props }: any) {
+                            return <h4 className="!text-lg !font-semibold !mt-3 !mb-2 !pb-0 !leading-tight" {...props}>{children}</h4>
+                          },
+                          ul({ children, ...props }: any) {
+                            return <ul className="list-disc pl-6 !my-2 space-y-1" {...props}>{children}</ul>
+                          },
+                          ol({ children, ...props }: any) {
+                            return <ol className="list-decimal pl-6 !my-2 space-y-1" {...props}>{children}</ol>
+                          },
+                          li({ children, ...props }: any) {
+                            return <li className="!my-1" {...props}>{children}</li>
+                          },
+                          a({ children, href, ...props }: any) {
+                            if (href) {
+                              const isYoutube = href.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/)
+                              const isLoom = href.match(/loom\.com\/share\/([a-f0-9]+)/)
+
+                              const displayText = Array.isArray(children) ? children[0] : children
+                              const isIntentionalEmbed = displayText === "embed" || displayText === href || href.startsWith(String(displayText))
+
+                              if (isIntentionalEmbed && isYoutube) {
+                                return (
+                                  <span className="block my-4 overflow-hidden rounded-xl border border-border aspect-video w-full max-w-3xl shadow-sm bg-muted/30">
+                                    <iframe className="w-full h-full block" src={`https://www.youtube.com/embed/${isYoutube[1]}`} allowFullScreen frameBorder="0"></iframe>
+                                  </span>
+                                )
+                              }
+                              if (isIntentionalEmbed && isLoom) {
+                                return (
+                                  <span className="block my-4 overflow-hidden rounded-xl border border-border aspect-video w-full max-w-3xl shadow-sm bg-muted/30">
+                                    <iframe className="w-full h-full block" src={`https://www.loom.com/embed/${isLoom[1]}`} allowFullScreen frameBorder="0"></iframe>
+                                  </span>
+                                )
+                              }
+                            }
+                            return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline hover:text-blue-800" {...props}>{children === "embed" ? href : children}</a>
+                          },
+                        }}
+                      >
+                        {doc.content}
+                      </ReactMarkdown>
                     </div>
                   ) : doc.file_url ? (
                     <div className="flex flex-col items-center justify-center py-12 rounded-lg border border-dashed border-border bg-muted/20">

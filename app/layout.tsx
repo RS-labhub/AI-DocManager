@@ -100,7 +100,7 @@ export default function RootLayout({
               <main className="flex-1">{children}</main>
               <footer className="border-t py-6">
                 <div className="container mx-auto text-center text-xs text-muted-foreground px-4">
-                  <p>R&apos;s DocManager &copy; {new Date().getFullYear()} &middot; Built by <a href="https://www.rohansrma.vercel.app" target="_blank" rel="noopener noreferrer"><u>Rohan Sharma</u></a> driven by the memories of Radhika Sharma</p>
+                  <p>R&apos;s DocManager &copy; {new Date().getFullYear()} &middot; Built by <a href="https://www.rohansrma.vercel.app" target="_blank" rel="noopener noreferrer"><u>Rohan Sharma</u></a> in search of Radhika Sharma</p>
                 </div>
               </footer>
             </div>

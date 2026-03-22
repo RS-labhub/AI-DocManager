@@ -50,8 +50,8 @@ export default function UsersPage() {
     const load = async () => {
       const supabase = createClient()
       let query = supabase.from("profiles").select("*")
-      // Org scoping (non-god/super_admin see only their org)
-      if (!isAtLeast(user.role, "super_admin") && user.org_id) {
+      // Org scoping (god can see all, super_admin and below only their org)
+      if (user.role !== "god" && user.org_id) {
         query = query.eq("org_id", user.org_id)
       }
       const { data } = await query.order("created_at", { ascending: false }) as { data: Profile[] | null }

@@ -31,6 +31,7 @@ import {
   Lock,
   ClipboardCheck,
   Users,
+  Crown,
 } from "lucide-react"
 import type { Document, Organization } from "@/lib/supabase/types"
 
@@ -43,6 +44,7 @@ export default function DocumentsPage() {
   const [typeFilter, setTypeFilter] = useState("all")
   const [orgFilter, setOrgFilter] = useState("all")
   const [orgs, setOrgs] = useState<Organization[]>([])
+  const [godUserIds, setGodUserIds] = useState<Set<string>>(new Set())
   const [activeTab, setActiveTab] = useState<"published" | "drafts" | "under_review" | "archived" | "review">("published")
   const isGod = user?.role === "god"
 
@@ -52,16 +54,17 @@ export default function DocumentsPage() {
       const supabase = createClient()
       let query = supabase.from("documents").select("*")
 
-      // God sees all but deduplicates by grouping unique docs
+      // God sees their own docs + ANY public docs across all orgs
       if (user.role === "god") {
-        // No org filter — load all
+        query = query.or(`owner_id.eq.${user.id},classification.eq.public`)
       } else if (user.org_id) {
-        // Super admins, admins, users — always scoped to their org
+        // Everyone else is strictly scoped to their org
         query = query.eq("org_id", user.org_id)
-      }
-      // Only non-admins see just their own docs
-      if (!isAtLeast(user.role, "admin") && user.role !== "god") {
-        query = query.eq("owner_id", user.id)
+        
+        // Normal users only see their own docs OR published docs
+        if (!isAtLeast(user.role, "admin")) {
+          query = query.or(`owner_id.eq.${user.id},status.eq.published`)
+        }
       }
 
       const { data } = await query.order("created_at", { ascending: false })
@@ -93,6 +96,10 @@ export default function DocumentsPage() {
         const { data: orgData } = await supabase.from("organizations").select("*").order("name") as { data: Organization[] | null }
         setOrgs(orgData || [])
       }
+
+      // Load all god user IDs so we can uniquely style their docs
+      const { data: gods } = await supabase.from("profiles").select("id").eq("role", "god")
+      if (gods) setGodUserIds(new Set(gods.map(g => g.id)))
 
       setLoading(false)
     }
@@ -258,8 +265,17 @@ export default function DocumentsPage() {
         </Card>
       ) : (
         <div className="space-y-1.5">
-          {filtered.map((doc) => (
-            <Card key={doc.id} className="hover:shadow-sm transition-shadow">
+          {filtered.map((doc) => {
+            const isGodDoc = godUserIds.has(doc.owner_id)
+            return (
+            <Card 
+              key={doc.id} 
+              className={`hover:shadow-sm transition-shadow ${
+                isGodDoc 
+                  ? "border-amber-500/50 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-950/20" 
+                  : ""
+              }`}
+            >
               <CardContent className="flex items-center justify-between p-4">
                 <Link
                   href={`/dashboard/documents/${doc.id}`}
@@ -326,7 +342,7 @@ export default function DocumentsPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+          )})}
         </div>
       )}
     </div>

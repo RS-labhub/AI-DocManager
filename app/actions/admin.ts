@@ -117,25 +117,28 @@ export async function deleteOrganization(
   id: string,
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createServerClient();
+  try {
+    const supabase = createServerClient();
+    
+    const { data: org, error: fetchErr } = await supabase.from("organizations").select("name").eq("id", id).single();
+    if (fetchErr || !org) return { success: false, error: "Organization not found" };
 
-  const { error } = await supabase
-    .from("organizations")
-    .delete()
-    .eq("id", id);
+    const { error } = await supabase.from("organizations").delete().eq("id", id);
+    if (error) return { success: false, error: error.message };
 
-  if (error) return { success: false, error: error.message };
+    await supabase.from("audit_logs").insert({
+      user_id: userId,
+      action: "delete",
+      resource_type: "organization",
+      resource_id: id,
+      details: { name: org.name }
+    });
 
-  await supabase.from("audit_logs").insert({
-    user_id: userId,
-    action: "delete",
-    resource_type: "organization",
-    resource_id: id,
-    details: {},
-  });
-
-  revalidatePath("/god");
-  return { success: true };
+    revalidatePath("/god");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to delete organization" };
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -637,4 +640,115 @@ export async function joinOrganization(
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/users");
   return { success: true, orgName: org.name };
+}
+
+export async function createOrgAndSuperAdmin(
+  payload: { orgName: string; description?: string; orgCode: string; adminEmail: string },
+  creatorId: string
+): Promise<{ success: boolean; org?: Organization; user?: Profile; error?: string }> {
+  try {
+    const supabase = createServerClient();
+    
+    // Check existing email
+    const { data: existing } = await supabase.from("profiles").select("id, org_id").eq("email", payload.adminEmail.toLowerCase().trim()).single();
+    if (existing && existing.org_id) return { success: false, error: "Email already associated with an organization" };
+
+    // Create org
+    const orgCode = payload.orgCode.toUpperCase().trim() || generateOrgCode();
+    const slug = payload.orgName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
+    
+    const { data: org, error: orgErr } = await supabase
+      .from("organizations")
+      .insert({ 
+        name: payload.orgName.trim(), 
+        slug, 
+        org_code: orgCode,
+        description: payload.description?.trim() || null 
+      })
+      .select()
+      .single();
+      
+    if (orgErr || !org) return { success: false, error: orgErr?.message || "Failed to create org" };
+    
+    let userId: string;
+    let profileData: Profile;
+
+    if (existing) {
+      userId = existing.id;
+      // Update existing profile
+      const { data: updatedProfile, error: updateErr } = await supabase
+        .from("profiles")
+        .update({
+          role: "super_admin",
+          org_id: org.id,
+          approval_status: "approved",
+          is_active: true
+        })
+        .eq("id", userId)
+        .select()
+        .single();
+
+      if (updateErr || !updatedProfile) {
+        await supabase.from("organizations").delete().eq("id", org.id);
+        return { success: false, error: updateErr?.message || "Failed to update existing user profile" };
+      }
+      profileData = updatedProfile;
+
+    } else {
+      // Create admin user in auth.users
+      const tempPassword = "Password123!"; // Required by custom credential flow too
+      const adminName = payload.adminEmail.split('@')[0] || "Admin";
+      const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
+        email: payload.adminEmail.toLowerCase().trim(),
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { full_name: adminName }
+      });
+      
+      if (authErr || !authData.user) {
+        await supabase.from("organizations").delete().eq("id", org.id);
+        return { success: false, error: authErr?.message || "Failed to create auth user" };
+      }
+      
+      userId = authData.user.id;
+      const hash = await bcrypt.hash(tempPassword, 12);
+      
+      // Create profile
+      const { data: profile, error: profileErr } = await supabase
+        .from("profiles")
+        .insert({
+          id: userId,
+          email: payload.adminEmail.toLowerCase().trim(),
+          full_name: adminName,
+          role: "super_admin",
+          org_id: org.id,
+          is_active: true,
+          approval_status: "approved"
+        })
+        .select()
+        .single();
+        
+      if (profileErr || !profile) {
+         await supabase.auth.admin.deleteUser(userId);
+         await supabase.from("organizations").delete().eq("id", org.id);
+         return { success: false, error: profileErr?.message || "Failed to create profile" };
+      }
+      profileData = profile;
+      
+      // Create credentials
+      await supabase.from("credentials").insert({ user_id: userId, password_hash: hash });
+    }
+    
+    await supabase.from("audit_logs").insert([
+      { user_id: creatorId, action: "create_org", resource_type: "organization", resource_id: org.id, details: { name: org.name } },
+      { user_id: creatorId, action: "assign_super_admin", resource_type: "user", resource_id: userId, details: { email: profileData.email, role: profileData.role }, org_id: org.id }
+    ]);
+    
+    await syncUserToPermit(userId, profileData.email, profileData.role, org.id);
+    
+    revalidatePath("/god");
+    return { success: true, org, user: profileData };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to create org and admin" };
+  }
 }

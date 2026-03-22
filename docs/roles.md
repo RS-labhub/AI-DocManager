@@ -87,7 +87,7 @@ Organization administrators with elevated privileges for user management and app
 - Cannot delete God documents or other Super Admin documents
 
 ### Other Capabilities
-- Promote users up to the Admin role within their organization
+- Promote users up to the Super Admin role within their organization
 - Manage all users within their organization
 - **Approve or reject pending membership requests** for their organization
 - Access system settings
@@ -125,7 +125,7 @@ Platform-wide control with unique multi-org capabilities.
 
 ### Other Capabilities
 - Full God Panel with platform overview
-- **Access to all organizations and their documents** (only role with cross-org access)
+- **Access to all organizations and their documents if public** (only role with cross-org access)
 - Manage any user and assign any role including God
 - **View and regenerate organization codes**
 - Bypass document password protection

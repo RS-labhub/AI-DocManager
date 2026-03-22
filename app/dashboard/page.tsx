@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { isAtLeast, getRoleInfo } from "@/lib/permissions"
+import { useToast } from "@/hooks/use-toast"
 import {
   FileText,
   Users,
@@ -20,6 +21,7 @@ import {
   Clock,
   Zap,
   TrendingUp,
+  Copy
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -44,9 +46,11 @@ interface DashboardStats {
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [orgName, setOrgName] = useState<string | null>(null)
+  const [orgCode, setOrgCode] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -54,18 +58,22 @@ export default function DashboardPage() {
       const supabase = createClient()
       const isGodOrSuper = isAtLeast(user.role, "super_admin")
       const isAdminPlus = isAtLeast(user.role, "admin")
+      const isGod = user.role === "god"
 
       if (user.org_id) {
         const { data: org } = await supabase
           .from("organizations")
-          .select("name")
+          .select("name, org_code")
           .eq("id", user.org_id)
-          .single() as { data: { name: string } | null }
-        if (org) setOrgName(org.name)
+          .single() as { data: { name: string; org_code: string } | null }
+        if (org) {
+          setOrgName(org.name)
+          setOrgCode(org.org_code)
+        }
       }
 
       let docQuery = supabase.from("documents").select("id, title, created_at, classification", { count: "exact" })
-      if (!isGodOrSuper && user.org_id) {
+      if (!isGod && user.org_id) {
         docQuery = docQuery.eq("org_id", user.org_id)
       }
       if (!isAdminPlus) {
@@ -78,7 +86,7 @@ export default function DashboardPage() {
       let userCount = 0
       if (isAdminPlus) {
         let userQuery = supabase.from("profiles").select("id", { count: "exact" })
-        if (!isGodOrSuper && user.org_id) {
+        if (!isGod && user.org_id) {
           userQuery = userQuery.eq("org_id", user.org_id)
         }
         const { count } = await userQuery
@@ -86,7 +94,7 @@ export default function DashboardPage() {
       }
 
       let orgCount = 0
-      if (isGodOrSuper) {
+      if (isGod) {
         const { count } = await supabase.from("organizations").select("id", { count: "exact" })
         orgCount = count || 0
       }
@@ -98,7 +106,7 @@ export default function DashboardPage() {
         .eq("is_active", true)
 
       let logQuery = supabase.from("audit_logs").select("id, action, resource_type, created_at")
-      if (!isGodOrSuper && user.org_id) {
+      if (!isGod && user.org_id) {
         logQuery = logQuery.eq("org_id", user.org_id)
       }
       if (!isAdminPlus) {
@@ -125,36 +133,59 @@ export default function DashboardPage() {
 
   const roleInfo = getRoleInfo(user.role)
   const isAdminPlus = isAtLeast(user.role, "admin")
-  const isGodOrSuper = isAtLeast(user.role, "super_admin")
+  const isGod = user.role === "god"
 
   const statCards = [
     {
+      id: "documents",
       title: "Documents",
       value: stats?.totalDocuments ?? 0,
       icon: FileText,
       href: "/dashboard/documents",
       show: true,
+      onClick: undefined,
     },
     {
+      id: "users",
       title: "Users",
       value: stats?.totalUsers ?? 0,
       icon: Users,
       href: "/dashboard/users",
       show: isAdminPlus,
+      onClick: undefined,
     },
     {
+      id: "organizations",
       title: "Organizations",
       value: stats?.totalOrganizations ?? 0,
       icon: Building2,
       href: "/god",
-      show: isGodOrSuper,
+      show: isGod, // Only God sees Org count
+      onClick: undefined,
     },
     {
+      id: "org-code",
+      title: "Organization Code",
+      value: orgCode || "None",
+      icon: Copy,
+      href: "#",
+      show: isAdminPlus && !isGod && !!orgCode, // Admins/Super-admins see their Org Code
+      onClick: (e: React.MouseEvent) => {
+        e.preventDefault()
+        if (orgCode) {
+          navigator.clipboard.writeText(orgCode)
+          toast({ title: "Copied!", description: "Organization code copied to clipboard (Users can join using this code)" })
+        }
+      }
+    },
+    {
+      id: "ai-keys",
       title: "Active AI Keys",
       value: stats?.totalAiKeys ?? 0,
       icon: Key,
       href: "/dashboard/settings/ai-keys",
       show: true,
+      onClick: undefined,
     },
   ].filter((c) => c.show)
 
@@ -166,11 +197,11 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Welcome back, {user.full_name?.split(" ")[0] || "User"}
           </h1>
-          <div className="flex items-center gap-2 mt-1.5">
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             <Badge className={`${roleInfo.bgClass} text-xs`}>{roleInfo.label}</Badge>
             {orgName && (
-              <span className="text-sm text-muted-foreground flex items-center gap-1">
-                <Building2 className="h-3 w-3" />
+              <span className="text-sm text-muted-foreground flex items-center gap-1 ml-1">
+                <Building2 className="h-3 w-3 text-muted-foreground" />
                 {orgName}
               </span>
             )}
@@ -216,27 +247,49 @@ export default function DashboardPage() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {statCards.map((card) => (
-          <Link key={card.title} href={card.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+        {statCards.map((card) => {
+          const CardContentInner = (
+            <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
               <CardContent className="pt-5 pb-4 px-5">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs text-muted-foreground">{card.title}</p>
                     {loading ? (
                       <Skeleton className="h-8 w-12 mt-1 rounded" />
+                    ) : card.id === 'org-code' ? (
+                      <div className="mt-1 flex items-center">
+                        <code className="text-xl font-mono font-semibold bg-muted px-2 py-0.5 rounded-md border border-border">
+                          {card.value}
+                        </code>
+                      </div>
                     ) : (
-                      <p className="text-3xl font-semibold mt-0.5 tracking-tight">{card.value}</p>
+                      <p className="text-3xl font-semibold mt-0.5 tracking-tight">
+                        {card.value}
+                      </p>
                     )}
                   </div>
-                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
                     <card.icon className="h-4.5 w-4.5 text-muted-foreground" />
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </Link>
-        ))}
+          )
+
+          if (card.onClick) {
+            return (
+              <div key={card.id} onClick={card.onClick} role="button" tabIndex={0}>
+                {CardContentInner}
+              </div>
+            )
+          }
+
+          return (
+            <Link key={card.id} href={card.href}>
+              {CardContentInner}
+            </Link>
+          )
+        })}
       </div>
 
       {/* Main Content Grid */}
@@ -329,7 +382,7 @@ export default function DashboardPage() {
                   </Link>
                 </Button>
               )}
-              {isGodOrSuper && (
+              {isGod && (
                 <Button variant="outline" className="w-full justify-start h-9 text-sm" asChild>
                   <Link href="/god">
                     <Building2 className="mr-2 h-3.5 w-3.5" /> God Panel

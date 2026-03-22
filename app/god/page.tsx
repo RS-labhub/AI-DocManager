@@ -4,13 +4,24 @@ import React, { useEffect, useState } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { getRoleInfo } from "@/lib/permissions"
 import { createClient } from "@/lib/supabase/client"
+import { createOrgAndSuperAdmin, deleteOrganization } from "@/app/actions/admin"
 import type { Organization, Profile, UserRole } from "@/lib/supabase/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
@@ -37,6 +48,7 @@ import {
   Download,
   ChevronDown,
   ChevronRight,
+  Trash2,
 } from "lucide-react"
 
 interface OrgStats {
@@ -65,6 +77,75 @@ export default function GodPanelPage() {
   const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set())
   const [roleFilter, setRoleFilter] = useState<UserRole | "all">("all")
   const [orgFilter, setOrgFilter] = useState<string>("all")
+
+  // Create Org & Admin state
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isCreatingOrg, setIsCreatingOrg] = useState(false)
+  const [newOrgName, setNewOrgName] = useState("")
+  const [newOrgDesc, setNewOrgDesc] = useState("")
+  const [newOrgCode, setNewOrgCode] = useState("")
+  const [newAdminEmail, setNewAdminEmail] = useState("")
+
+  // Delete Org state
+  const [orgToDelete, setOrgToDelete] = useState<{ id: string; name: string } | null>(null)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [isDeletingOrg, setIsDeletingOrg] = useState(false)
+
+  const handleDeleteOrg = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || user.role !== "god" || !orgToDelete) return
+    if (deleteConfirmText !== orgToDelete.name) {
+      alert("Organization name does not match.")
+      return
+    }
+    
+    setIsDeletingOrg(true)
+    try {
+      const result = await deleteOrganization(orgToDelete.id, user.id)
+      if (result.error) {
+        alert(result.error)
+      } else {
+        alert("Organization deleted successfully.")
+        setOrgToDelete(null)
+        setDeleteConfirmText("")
+        window.location.reload()
+      }
+    } catch (error) {
+      console.error(error)
+      alert("An unexpected error occurred.")
+    } finally {
+      setIsDeletingOrg(false)
+    }
+  }
+
+  const handleCreateOrg = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || user.role !== "god") return
+    setIsCreatingOrg(true)
+    try {
+      const result = await createOrgAndSuperAdmin(
+        { orgName: newOrgName, description: newOrgDesc, orgCode: newOrgCode, adminEmail: newAdminEmail },
+        user.id
+      )
+      if (result.error) {
+        alert(result.error)
+      } else {
+        alert("Organization and Super Admin created successfully!")
+        setIsCreateOpen(false)
+        setNewOrgName("")
+        setNewOrgDesc("")
+        setNewOrgCode("")
+        setNewAdminEmail("")
+        // Refresh page
+        window.location.reload()
+      }
+    } catch (error) {
+      console.error(error)
+      alert("An unexpected error occurred.")
+    } finally {
+      setIsCreatingOrg(false)
+    }
+  }
 
   const toggleOrg = (orgId: string) => {
     setExpandedOrgs((prev) => {
@@ -231,10 +312,87 @@ export default function GodPanelPage() {
 
         {/* Organizations Tab */}
         <TabsContent value="orgs" className="mt-4 space-y-3">
-          <div className="flex justify-end">
-            <div className="flex gap-1.5">
-              <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" onClick={() => exportData("orgs", "csv")}><Download className="h-3 w-3" /> CSV</Button>
-              <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" onClick={() => exportData("orgs", "json")}><Download className="h-3 w-3" /> JSON</Button>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2">
+            <h2 className="text-lg font-semibold tracking-tight">Organizations Overview</h2>
+            <div className="flex items-center gap-2">
+              <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="h-8 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white">
+                    <Building2 className="h-4 w-4" />
+                    <span className="hidden sm:inline">Create Org & Admin</span>
+                    <span className="sm:hidden">Create</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create Organization & Super Admin</DialogTitle>
+                    <DialogDescription>
+                      This will instantly provision a new Organization and set up a Super Admin account.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateOrg} className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="orgName">Organization Name *</Label>
+                      <Input
+                        id="orgName"
+                        value={newOrgName}
+                        onChange={(e) => setNewOrgName(e.target.value)}
+                        placeholder="e.g. Acme Corp"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="orgDesc">Description (Optional)</Label>
+                      <Input
+                        id="orgDesc"
+                        value={newOrgDesc}
+                        onChange={(e) => setNewOrgDesc(e.target.value)}
+                        placeholder="e.g. Main corporate entity"
+                      />
+                    </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="orgCode">Organization Code *</Label>
+                        <Input
+                          id="orgCode"
+                          value={newOrgCode}
+                          onChange={(e) => setNewOrgCode(e.target.value)}
+                          placeholder="e.g. ACME2026"
+                          required
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-1">Users can join using this code.</p>
+                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="adminEmail">Super Admin Email *</Label>
+                      <Input
+                        id="adminEmail"
+                        type="email"
+                        value={newAdminEmail}
+                        onChange={(e) => setNewAdminEmail(e.target.value)}
+                        placeholder="admin@acme.com"
+                        required
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setIsCreateOpen(false)}
+                        disabled={isCreatingOrg}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isCreatingOrg}>
+                        {isCreatingOrg ? "Creating..." : "Create Organization"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
+              <div className="flex gap-1.5 ml-2 border-l pl-2 border-border">
+                <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" onClick={() => exportData("orgs", "csv")}><Download className="h-3 w-3" /> CSV</Button>
+                <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" onClick={() => exportData("orgs", "json")}><Download className="h-3 w-3" /> JSON</Button>
+              </div>
             </div>
           </div>
           <div className="space-y-3">
@@ -245,7 +403,7 @@ export default function GodPanelPage() {
                   const isExpanded = expandedOrgs.has(s.org.id)
                   return (
                     <Card key={s.org.id} className="overflow-hidden">
-                      <button onClick={() => toggleOrg(s.org.id)} className="w-full text-left">
+                      <div onClick={() => toggleOrg(s.org.id)} className="w-full text-left cursor-pointer transition-colors hover:bg-muted/50">
                         <CardHeader className="pb-2">
                           <div className="flex items-start sm:items-center justify-between gap-2">
                             <CardTitle className="text-sm flex items-center gap-2 flex-wrap min-w-0">
@@ -253,11 +411,22 @@ export default function GodPanelPage() {
                                 <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
                               </div>
                               <span className="truncate">{s.org.name}</span>
-                              <Badge variant="outline" className="text-[10px] font-mono hidden sm:inline-flex">{s.org.slug}</Badge>
                               <Badge variant="secondary" className="text-[10px] font-mono hidden sm:inline-flex">Code: {s.org.org_code}</Badge>
                             </CardTitle>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <div className="flex gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-red-50 dark:hover:bg-red-950/50"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setOrgToDelete({ id: s.org.id, name: s.org.name })
+                                }}
+                                title="Delete Organization"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <div className="flex gap-2 sm:gap-3">
                                 <span className="text-xs text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />{s.userCount}</span>
                                 <span className="text-xs text-muted-foreground flex items-center gap-1"><FileText className="h-3 w-3" />{s.docCount}</span>
                               </div>
@@ -265,7 +434,8 @@ export default function GodPanelPage() {
                             </div>
                           </div>
                         </CardHeader>
-                      </button>
+                      </div>
+
                       {isExpanded && (
                         <CardContent className="pt-0">
                           {orgUsers.length === 0 ? (
@@ -502,6 +672,56 @@ export default function GodPanelPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={!!orgToDelete} onOpenChange={(open) => {
+        if (!open) {
+          setOrgToDelete(null)
+          setDeleteConfirmText("")
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete Organization</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. This will permanently delete the organization <strong>{orgToDelete?.name}</strong>, all its users, documents, and associated data.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleDeleteOrg} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="confirmName">
+                Please type <strong>{orgToDelete?.name}</strong> to confirm.
+              </Label>
+              <Input
+                id="confirmName"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={orgToDelete?.name}
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setOrgToDelete(null)
+                  setDeleteConfirmText("")
+                }}
+                disabled={isDeletingOrg}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="destructive"
+                disabled={isDeletingOrg || deleteConfirmText !== orgToDelete?.name}
+              >
+                {isDeletingOrg ? "Deleting..." : "Delete Organization"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
