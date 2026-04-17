@@ -9,7 +9,11 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;           // 128-bit IV
 const AUTH_TAG_LENGTH = 16;     // 128-bit auth tag
 
+let _cachedKey: Buffer | null = null;
+
 function getEncryptionKey(): Buffer {
+  if (_cachedKey) return _cachedKey;
+
   const key = process.env.ENCRYPTION_KEY;
   if (!key) {
     throw new Error("ENCRYPTION_KEY environment variable is not set");
@@ -18,7 +22,25 @@ function getEncryptionKey(): Buffer {
   if (key.length !== 64) {
     throw new Error("ENCRYPTION_KEY must be a 64-character hex string (32 bytes)");
   }
-  return Buffer.from(key, "hex");
+  if (!/^[0-9a-fA-F]{64}$/.test(key)) {
+    throw new Error("ENCRYPTION_KEY must be valid hex (0-9, a-f)");
+  }
+  _cachedKey = Buffer.from(key, "hex");
+  return _cachedKey;
+}
+
+/**
+ * Validate the ENCRYPTION_KEY at module load time so misconfiguration
+ * fails fast instead of on the first encrypt/decrypt call. Skipped in
+ * test environments to allow mocked flows.
+ */
+if (process.env.NODE_ENV !== "test" && typeof process.env.ENCRYPTION_KEY === "string") {
+  try {
+    getEncryptionKey();
+  } catch (err) {
+    // Re-throw with a clearer message so start-up fails loudly.
+    throw new Error(`[encryption] Invalid ENCRYPTION_KEY: ${(err as Error).message}`);
+  }
 }
 
 export interface EncryptedPayload {

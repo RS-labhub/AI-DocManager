@@ -1,150 +1,165 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { withAuth } from "@/lib/auth/require";
+import { deleteDocumentSchema } from "@/lib/schemas";
+import { outranks } from "@/lib/permissions";
+import type { UserRole } from "@/lib/supabase/types";
+import { ZodError } from "zod";
 
-export async function POST(req: NextRequest) {
+export const runtime = "nodejs";
+
+export const POST = withAuth(async (authed, req: NextRequest) => {
   try {
-    const body = await req.json()
-    const { documentId, userId, userRole } = body
+    const raw = await req.json();
+    const { documentId } = deleteDocumentSchema.parse(raw);
+    const supabase = await createServerClient();
 
-    if (!documentId || !userId || !userRole) {
-      return NextResponse.json(
-        { error: "documentId, userId, and userRole are required" },
-        { status: 400 }
-      )
-    }
-
-    const supabase = createServerClient()
-
-    // Fetch the document
     const { data: doc, error: docError } = await supabase
       .from("documents")
       .select("*")
       .eq("id", documentId)
-      .single()
+      .single();
 
     if (docError || !doc) {
-      return NextResponse.json(
-        { error: "Document not found" },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
 
-    const ROLE_WEIGHT: Record<string, number> = {
-      god: 100,
-      super_admin: 75,
-      admin: 50,
-      user: 10,
-    }
-
-    const isOwner = doc.owner_id === userId
+    const isOwner = doc.owner_id === authed.id;
 
     if (!isOwner) {
-      // Verify the requester outranks the owner
       const { data: ownerProfile } = await supabase
         .from("profiles")
         .select("role")
         .eq("id", doc.owner_id)
-        .single()
+        .single();
 
       if (!ownerProfile) {
         return NextResponse.json(
-          { error: "Cannot verify document owner. Deletion denied." },
+          { error: "Cannot verify document owner" },
           { status: 403 }
-        )
+        );
       }
 
-      const ownerWeight = ROLE_WEIGHT[ownerProfile.role] || 0
-      const requesterWeight = ROLE_WEIGHT[userRole] || 0
-
-      if (userRole === "god") {
-        // God can delete any public doc
+      const callerRole = authed.profile.role as UserRole;
+      if (callerRole === "god") {
+        // God can delete public docs owned by others; private org docs are respected.
         if (!doc.is_public) {
           return NextResponse.json(
-            { error: "God can only delete public documents owned by others." },
+            { error: "God can only delete public documents owned by others" },
             { status: 403 }
-          )
+          );
         }
-      } else if (requesterWeight <= ownerWeight) {
-        return NextResponse.json(
-          { error: "You don't have permission to delete this document." },
-          { status: 403 }
-        )
+      } else {
+        // Admin+ can delete docs of users below them, in the same org.
+        if (doc.org_id !== authed.profile.org_id) {
+          return NextResponse.json({ error: "Cross-org access denied" }, { status: 403 });
+        }
+        if (!outranks(callerRole, ownerProfile.role as UserRole)) {
+          return NextResponse.json(
+            { error: "You don't have permission to delete this document" },
+            { status: 403 }
+          );
+        }
       }
     }
 
-    // Delete file from storage if it exists
+    // ACL has passed — use the admin client for storage + cross-org
+    // ops. The `documents` bucket is RLS-locked to service_role and
+    // `audit_logs` has no insert policy for authenticated users.
+    const admin = createAdminClient();
+
+    // Delete storage file
     if (doc.file_url) {
       try {
-        const parts = doc.file_url.split("/documents/")
+        const parts = doc.file_url.split("/documents/");
         if (parts.length >= 2) {
-          const storagePath = parts[parts.length - 1]
-          await supabase.storage.from("documents").remove([storagePath])
+          const storagePath = parts[parts.length - 1];
+          await admin.storage.from("documents").remove([storagePath]);
         }
       } catch (storageErr) {
-        console.error("Storage deletion error (non-fatal):", storageErr)
+        console.error("[delete-document] storage non-fatal:", storageErr);
       }
     }
 
-    // Find all copies of this document (same title + owner across orgs)
-    // This handles the case where God distributed a doc to multiple orgs
-    const { data: allCopies } = await supabase
-      .from("documents")
-      .select("id, file_url")
-      .eq("title", doc.title)
-      .eq("owner_id", doc.owner_id)
+    // Only god can propagate a delete across all orgs (god-distribution
+    // artifacts). Everyone else deletes exactly the row they targeted.
+    if (authed.profile.role === "god") {
+      const { data: allCopies } = await admin
+        .from("documents")
+        .select("id, file_url, org_id")
+        .eq("title", doc.title)
+        .eq("owner_id", doc.owner_id);
 
-    if (allCopies && allCopies.length > 1) {
-      // Delete storage files for all copies (they may share same URL or differ)
-      const urlsDeleted = new Set<string>()
-      for (const copy of allCopies) {
-        if (copy.file_url && !urlsDeleted.has(copy.file_url)) {
-          urlsDeleted.add(copy.file_url)
-          try {
-            const parts = copy.file_url.split("/documents/")
-            if (parts.length >= 2) {
-              const storagePath = parts[parts.length - 1]
-              await supabase.storage.from("documents").remove([storagePath])
+      if (allCopies && allCopies.length > 1) {
+        const urlsDeleted = new Set<string>();
+        for (const copy of allCopies) {
+          if (copy.file_url && !urlsDeleted.has(copy.file_url)) {
+            urlsDeleted.add(copy.file_url);
+            try {
+              const parts = copy.file_url.split("/documents/");
+              if (parts.length >= 2) {
+                await admin.storage.from("documents").remove([parts[parts.length - 1]]);
+              }
+            } catch {
+              /* silent */
             }
-          } catch { /* silent */ }
+          }
+        }
+
+        const { error: deleteError } = await admin
+          .from("documents")
+          .delete()
+          .eq("title", doc.title)
+          .eq("owner_id", doc.owner_id);
+
+        if (deleteError) {
+          console.error("[delete-document]", deleteError);
+          return NextResponse.json({ error: "Failed to delete document" }, { status: 500 });
+        }
+      } else {
+        const { error: deleteError } = await supabase
+          .from("documents")
+          .delete()
+          .eq("id", documentId);
+
+        if (deleteError) {
+          console.error("[delete-document]", deleteError);
+          return NextResponse.json({ error: "Failed to delete document" }, { status: 500 });
         }
       }
-
-      // Delete all copies from the database
-      const { error: deleteError } = await supabase
-        .from("documents")
-        .delete()
-        .eq("title", doc.title)
-        .eq("owner_id", doc.owner_id)
-
-      if (deleteError) {
-        console.error("Document delete error:", deleteError)
-        return NextResponse.json(
-          { error: deleteError.message || "Failed to delete document" },
-          { status: 500 }
-        )
-      }
     } else {
-      // Single document, just delete it
+      // Non-god callers only touch exactly the id they asked to delete.
       const { error: deleteError } = await supabase
         .from("documents")
         .delete()
-        .eq("id", documentId)
+        .eq("id", documentId);
 
       if (deleteError) {
-        console.error("Document delete error:", deleteError)
-        return NextResponse.json(
-          { error: deleteError.message || "Failed to delete document" },
-          { status: 500 }
-        )
+        console.error("[delete-document]", deleteError);
+        return NextResponse.json({ error: "Failed to delete document" }, { status: 500 });
       }
     }
 
-    return NextResponse.json({ success: true })
-  } catch (err: any) {
-    console.error("Delete document error:", err)
-    return NextResponse.json(
-      { error: err.message || "Failed to delete document" },
-      { status: 500 }
-    )
+    // audit_logs has no authenticated-role INSERT policy — must use admin.
+    await admin.from("audit_logs").insert({
+      user_id: authed.id,
+      action: "delete",
+      resource_type: "document",
+      resource_id: documentId,
+      details: { title: doc.title },
+      org_id: doc.org_id,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return NextResponse.json(
+        { error: err.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+    console.error("[delete-document] error:", err);
+    return NextResponse.json({ error: "Failed to delete document" }, { status: 500 });
   }
-}
+});

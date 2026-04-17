@@ -51,6 +51,8 @@ const DOC_ORDER = [
   "organizations",
   "ai-features",
   "security",
+  "terms",
+  "privacy",
   "faq",
   "troubleshooting",
   "about-creator",

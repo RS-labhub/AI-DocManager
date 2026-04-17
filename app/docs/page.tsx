@@ -7,8 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+  SheetHeader,
+} from "@/components/ui/sheet";
+import {
   Search, BookOpen, ChevronRight, FileText, Loader2, X,
-  ArrowUp, Hash, ExternalLink,
+  ArrowUp, Hash, ExternalLink, Menu, List, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,15 +37,38 @@ export default function DocsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [showTop, setShowTop] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/docs").then(r => r.json()).then(d => {
-      setDocs(d.docs || []);
-      if (d.docs?.length) setActiveSlug(d.docs[0].slug);
+      const all: DocFile[] = d.docs || [];
+      setDocs(all);
+      if (!all.length) return;
+      // Honour hash-based deep links like /docs#terms or /docs#privacy.
+      const hash = typeof window !== "undefined"
+        ? window.location.hash.replace(/^#/, "")
+        : "";
+      const matched = hash && all.find(doc => doc.slug === hash);
+      setActiveSlug(matched ? matched.slug : all[0].slug);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
+
+  // React to in-page hash changes (back/forward, clicking a hash link
+  // while already on /docs).
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.replace(/^#/, "");
+      if (!hash) return;
+      setActiveSlug(prev => {
+        const exists = docs.some(d => d.slug === hash);
+        return exists ? hash : prev;
+      });
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [docs]);
 
   useEffect(() => {
     const fn = () => setShowTop(window.scrollY > 300);
@@ -80,6 +110,7 @@ export default function DocsPage() {
     setActiveSlug(slug);
     setSearchOpen(false);
     setSearchQuery("");
+    setMobileNavOpen(false);
     if (headingId) {
       setTimeout(() => {
         document.getElementById(headingId)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -112,22 +143,55 @@ export default function DocsPage() {
     <div className="min-h-screen bg-background">
       {/* Search Overlay */}
       {searchOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center pt-[15vh]" onClick={() => { setSearchOpen(false); setSearchQuery(""); }}>
-          <div className="w-full max-w-lg bg-background border rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-2 px-4 py-3 border-b">
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center p-4 pt-[10vh] sm:pt-[15vh]"
+          onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
+        >
+          <div
+            className="w-full max-w-[92vw] sm:max-w-lg bg-background border rounded-xl shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b">
               <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Input ref={searchRef} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search documentation..." className="border-0 shadow-none focus-visible:ring-0 h-8 text-[15px]" autoFocus />
-              {searchQuery && <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setSearchQuery("")}><X className="h-3.5 w-3.5" /></Button>}
+              <Input
+                ref={searchRef}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search documentation..."
+                className="border-0 shadow-none focus-visible:ring-0 h-8 text-[14px] sm:text-[15px] px-1"
+                autoFocus
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
+                aria-label="Close search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
             </div>
             {searchResults.length > 0 && (
-              <ScrollArea className="max-h-[320px]">
+              <ScrollArea className="max-h-[50vh] sm:max-h-[320px]">
                 <div className="p-2">
                   {searchResults.map((r, i) => (
-                    <button key={i} onClick={() => navigate(r.docSlug, r.headingId)} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-muted/60 transition-colors">
-                      {r.type === "page" ? <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                    <button
+                      key={i}
+                      onClick={() => navigate(r.docSlug, r.headingId)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-muted/60 transition-colors"
+                    >
+                      {r.type === "page"
+                        ? <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        : <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                       <div className="min-w-0">
-                        <p className="text-[13px] font-medium truncate">{r.type === "heading" ? r.headingText : r.docTitle}</p>
-                        {r.type === "heading" && <p className="text-[11px] text-muted-foreground truncate">{r.docTitle}</p>}
+                        <p className="text-[13px] font-medium truncate">
+                          {r.type === "heading" ? r.headingText : r.docTitle}
+                        </p>
+                        {r.type === "heading" && (
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {r.docTitle}
+                          </p>
+                        )}
                       </div>
                     </button>
                   ))}
@@ -135,11 +199,17 @@ export default function DocsPage() {
               </ScrollArea>
             )}
             {searchQuery && searchResults.length === 0 && (
-              <div className="p-6 text-center text-sm text-muted-foreground">No results found</div>
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                No results found
+              </div>
             )}
-            <div className="px-4 py-2 border-t bg-muted/30 flex items-center justify-between">
-              <span className="text-[11px] text-muted-foreground">Navigate results</span>
-              <span className="text-[11px] text-muted-foreground">ESC to close</span>
+            <div className="px-3 sm:px-4 py-2 border-t bg-muted/30 flex items-center justify-between">
+              <span className="text-[10px] sm:text-[11px] text-muted-foreground">
+                {searchResults.length} result{searchResults.length === 1 ? "" : "s"}
+              </span>
+              <span className="text-[10px] sm:text-[11px] text-muted-foreground">
+                ESC to close
+              </span>
             </div>
           </div>
         </div>
@@ -176,15 +246,137 @@ export default function DocsPage() {
         {/* Main Content */}
         <main className="flex-1 min-w-0">
           {/* Mobile nav */}
-          <div className="lg:hidden sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-4 py-2">
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-primary" />
-              <select value={activeSlug} onChange={e => navigate(e.target.value)}
-                className="flex-1 text-[13px] bg-transparent border-0 outline-none">
-                {docs.map(d => <option key={d.slug} value={d.slug}>{d.title}</option>)}
-              </select>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setSearchOpen(true); setTimeout(() => searchRef.current?.focus(), 100); }}>
-                <Search className="h-3.5 w-3.5" />
+          <div className="lg:hidden sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75 border-b">
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              {/* Page picker trigger */}
+              <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+                <SheetTrigger asChild>
+                  <button
+                    className="flex-1 min-w-0 flex items-center gap-2.5 h-10 px-3 rounded-lg border bg-card/60 hover:bg-muted/60 active:bg-muted transition-colors"
+                    aria-label="Open documentation navigation"
+                  >
+                    <span className="flex-shrink-0 h-6 w-6 rounded-md bg-primary/10 border border-primary/15 flex items-center justify-center">
+                      <BookOpen className="h-3 w-3 text-primary" />
+                    </span>
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-none mb-0.5">
+                        Documentation
+                      </p>
+                      <p className="text-[13px] font-medium truncate leading-tight">
+                        {activeDoc?.title ?? "Browse docs"}
+                      </p>
+                    </div>
+                    <Menu className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  </button>
+                </SheetTrigger>
+                <SheetContent
+                  side="left"
+                  className="w-[88vw] sm:w-[360px] p-0 flex flex-col gap-0"
+                >
+                  <SheetHeader className="p-4 border-b space-y-3 text-left">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-primary" />
+                      <SheetTitle className="text-[14px]">
+                        Documentation
+                      </SheetTitle>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setMobileNavOpen(false);
+                        setSearchOpen(true);
+                        setTimeout(() => searchRef.current?.focus(), 100);
+                      }}
+                      className="w-full flex items-center gap-2 h-9 px-3 rounded-lg border bg-muted/40 hover:bg-muted/60 transition-colors"
+                    >
+                      <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[12px] text-muted-foreground flex-1 text-left">
+                        Search docs...
+                      </span>
+                      <kbd className="text-[10px] bg-background border rounded px-1.5 py-0.5 text-muted-foreground">
+                        ⌘K
+                      </kbd>
+                    </button>
+                  </SheetHeader>
+
+                  <ScrollArea className="flex-1">
+                    <nav className="p-2">
+                      <p className="px-3 pt-2 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        Pages
+                      </p>
+                      {docs.map((doc) => {
+                        const active = activeSlug === doc.slug;
+                        return (
+                          <button
+                            key={doc.slug}
+                            onClick={() => navigate(doc.slug)}
+                            className={cn(
+                              "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] text-left transition-colors mb-0.5",
+                              active
+                                ? "bg-primary/10 text-primary font-medium"
+                                : "text-foreground/90 hover:bg-muted/60"
+                            )}
+                          >
+                            <FileText
+                              className={cn(
+                                "h-3.5 w-3.5 flex-shrink-0",
+                                active ? "text-primary" : "text-muted-foreground"
+                              )}
+                            />
+                            <span className="flex-1 truncate">{doc.title}</span>
+                            {active && (
+                              <Check className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
+
+                      {/* On this page (TOC) — current doc */}
+                      {activeDoc &&
+                        activeDoc.headings.filter(
+                          (h) => h.level >= 2 && h.level <= 3
+                        ).length > 0 && (
+                          <div className="mt-4">
+                            <p className="px-3 pt-2 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                              <List className="h-3 w-3" />
+                              On this page
+                            </p>
+                            <div className="space-y-0.5">
+                              {activeDoc.headings
+                                .filter((h) => h.level >= 2 && h.level <= 3)
+                                .map((h, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() =>
+                                      navigate(activeSlug, h.id)
+                                    }
+                                    className={cn(
+                                      "w-full flex items-center gap-2 py-1.5 rounded-md text-left text-[12.5px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors",
+                                      h.level === 3 ? "pl-8 pr-3" : "pl-5 pr-3"
+                                    )}
+                                  >
+                                    <Hash className="h-3 w-3 flex-shrink-0 opacity-60" />
+                                    <span className="truncate">{h.text}</span>
+                                  </button>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                    </nav>
+                  </ScrollArea>
+                </SheetContent>
+              </Sheet>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 flex-shrink-0"
+                onClick={() => {
+                  setSearchOpen(true);
+                  setTimeout(() => searchRef.current?.focus(), 100);
+                }}
+                aria-label="Search docs"
+              >
+                <Search className="h-4 w-4" />
               </Button>
             </div>
           </div>

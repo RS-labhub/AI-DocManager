@@ -1,4 +1,20 @@
 -- ══════════════════════════════════════════════════════════════
+--  DEPRECATED — do not run this file.
+--
+--  Seeding is now handled by the server at `POST /api/seed`
+--  (see app/api/seed/route.ts). That route:
+--    • Creates users via Supabase Auth (so passwords are handled
+--      securely by Supabase, not by our code).
+--    • Inserts profiles, organizations, documents, agents, etc.
+--    • Refuses to run if any profile already exists.
+--    • Requires the `x-seed-token` header matching `SEED_SECRET`.
+--    • Refuses to run in production unless ALLOW_PROD_SEED=true.
+--
+--  To seed a fresh database:
+--    curl -X POST http://localhost:3000/api/seed \
+--         -H "x-seed-token: $SEED_SECRET"
+-- ══════════════════════════════════════════════════════════════
+-- ══════════════════════════════════════════════════════════════
 --  Seed data — Run AFTER schema.sql
 --  Passwords are hashed with bcrypt (plaintext: "Password123!")
 -- ══════════════════════════════════════════════════════════════

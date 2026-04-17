@@ -30,7 +30,6 @@ const TABLES_IN_DELETE_ORDER = [
   "document_passwords",
   "document_comments",
   "documents",
-  "credentials",
   "profiles",
   "organizations",
 ];
@@ -110,7 +109,7 @@ async function main() {
   let deleted = 0;
   let failed = 0;
 
-  // Step 1: Delete auth.users FIRST — this cascades to profiles → credentials,
+  // Step 1: Delete auth.users FIRST — this cascades to profiles →
   // documents, document_comments, document_passwords, ai_api_keys, ai_agents, ai_actions, audit_logs
   console.log("  Step 1: Clearing Supabase Auth users (cascades to profiles & children)...\n");
   try {

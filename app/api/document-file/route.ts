@@ -1,83 +1,92 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { withAuth } from "@/lib/auth/require";
+import { documentFileQuerySchema } from "@/lib/schemas";
+import { ZodError } from "zod";
 
-export const dynamic = 'force-dynamic'
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (authed, req: NextRequest) => {
   try {
-    const { searchParams } = new URL(req.url)
-    const documentId = searchParams.get("documentId")
+    const { searchParams } = new URL(req.url);
+    const { documentId } = documentFileQuerySchema.parse({
+      documentId: searchParams.get("documentId"),
+    });
 
-    if (!documentId) {
-      return NextResponse.json(
-        { error: "documentId is required" },
-        { status: 400 }
-      )
-    }
+    const supabase = await createServerClient();
 
-    const supabase = createServerClient()
-
-    // Get document details
     const { data: doc, error: docError } = await supabase
       .from("documents")
-      .select("file_url, file_type")
+      .select("file_url, file_type, org_id, owner_id, is_public")
       .eq("id", documentId)
-      .single()
+      .single();
 
     if (docError || !doc || !doc.file_url) {
       return NextResponse.json(
         { error: "Document not found or no file attached" },
         { status: 404 }
-      )
+      );
     }
 
-    // Extract storage path from file_url
-    // file_url format: https://[project].supabase.co/storage/v1/object/public/documents/[path]
-    const urlParts = doc.file_url.split("/documents/")
+    // Authorization: god bypass, else same-org; private docs further restricted to
+    // owner + admin+.
+    if (authed.profile.role !== "god") {
+      if (doc.org_id !== authed.profile.org_id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      if (!doc.is_public && doc.owner_id !== authed.id) {
+        const role = authed.profile.role;
+        const isAdmin = role === "admin" || role === "super_admin";
+        if (!isAdmin) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      }
+    }
+
+    const urlParts = doc.file_url.split("/documents/");
     if (urlParts.length < 2) {
-      return NextResponse.json(
-        { error: "Invalid file URL format" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Invalid file URL" }, { status: 400 });
     }
+    const storagePath = urlParts[1];
 
-    const storagePath = urlParts[1]
-
-    // Download file from storage
-    const { data: fileData, error: downloadError } = await supabase.storage
+    // The `documents` bucket is private and storage-RLS-locked to service_role.
+    // Access is gated by the ACL checks above; we only reach this line after
+    // confirming the caller may read the document.
+    const admin = createAdminClient();
+    const { data: fileData, error: downloadError } = await admin.storage
       .from("documents")
-      .download(storagePath)
+      .download(storagePath);
 
     if (downloadError || !fileData) {
-      console.error("Download error:", downloadError)
-      return NextResponse.json(
-        { error: downloadError?.message || "Failed to download file" },
-        { status: 500 }
-      )
+      console.error("[document-file] download error:", downloadError);
+      return NextResponse.json({ error: "Failed to fetch file" }, { status: 500 });
     }
 
-    // Convert blob to buffer
-    const buffer = Buffer.from(await fileData.arrayBuffer())
+    const buffer = Buffer.from(await fileData.arrayBuffer());
+    const contentType = doc.file_type === "pdf" ? "application/pdf" : "application/octet-stream";
+    // Harden filename against header-injection (CR/LF/quote/backslash).
+    const rawName = storagePath.split("/").pop() ?? "file";
+    const safeFilename = rawName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200) || "file";
 
-    // Determine content type
-    const contentType = doc.file_type === "pdf" 
-      ? "application/pdf" 
-      : "application/octet-stream"
-
-    // Return file with appropriate headers
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `inline; filename="${storagePath.split("/").pop()}"`,
-        "Cache-Control": "public, max-age=3600",
+        "Content-Disposition": `inline; filename="${safeFilename}"`,
+        "Cache-Control": "private, max-age=300",
+        "X-Content-Type-Options": "nosniff",
       },
-    })
-  } catch (err: any) {
-    console.error("Document file fetch error:", err)
-    return NextResponse.json(
-      { error: err.message || "Failed to fetch file" },
-      { status: 500 }
-    )
+    });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return NextResponse.json(
+        { error: err.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+    console.error("[document-file] error:", err);
+    return NextResponse.json({ error: "Failed to fetch file" }, { status: 500 });
   }
-}
+});

@@ -4,7 +4,7 @@ import { Inter, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
-import Navbar from "@/components/navbar"
+import { AppNavbar, AppFooter } from "@/components/app-chrome"
 import { AuthProvider } from "@/lib/auth-context"
 
 const inter = Inter({
@@ -96,13 +96,9 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
           <AuthProvider>
             <div className="min-h-screen flex flex-col">
-              <Navbar />
+              <AppNavbar />
               <main className="flex-1">{children}</main>
-              <footer className="border-t py-6">
-                <div className="container mx-auto text-center text-xs text-muted-foreground px-4">
-                  <p>R&apos;s DocManager &copy; {new Date().getFullYear()} &middot; Built by <a href="https://www.rohansrma.vercel.app" target="_blank" rel="noopener noreferrer"><u>Rohan Sharma</u></a> in search of Radhika Sharma</p>
-                </div>
-              </footer>
+              <AppFooter />
             </div>
             <Toaster />
           </AuthProvider>

@@ -131,16 +131,6 @@ export interface AuditLog {
   created_at: string;
 }
 
-/* ─── Credentials (not directly queried via typed client usually) ── */
-
-export interface Credential {
-  id: string;
-  user_id: string;
-  password_hash: string;
-  created_at: string;
-  updated_at: string;
-}
-
 /* ─── Supabase-compatible Database type ─────────────────────── */
 
 /*
@@ -167,12 +157,6 @@ export interface Database {
         Row: Profile;
         Insert: Partial<Profile>;
         Update: Partial<Profile>;
-        Relationships: [];
-      };
-      credentials: {
-        Row: Credential;
-        Insert: Partial<Credential>;
-        Update: Partial<Credential>;
         Relationships: [];
       };
       documents: {

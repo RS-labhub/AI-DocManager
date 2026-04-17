@@ -1,56 +1,65 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase/server";
+import { withAuth } from "@/lib/auth/require";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { fileTypeFromBuffer } from "file-type";
 
-export async function POST(req: NextRequest) {
+export const runtime = "nodejs";
+
+const ALLOWED_IMAGE_MIMES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+]);
+const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+
+export const POST = withAuth(async (authed, req: NextRequest) => {
   try {
-    const formData = await req.formData()
-    const file = formData.get("file") as File | null
-    const userId = formData.get("userId") as string | null
+    const rl = await checkRateLimit("avatar", authed.id, 10, 300);
+    if (rl) return rl;
 
-    if (!file || !userId) {
-      return NextResponse.json({ error: "file and userId are required" }, { status: 400 })
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    if (!file) {
+      return NextResponse.json({ error: "file is required" }, { status: 400 });
+    }
+    if (file.size === 0 || file.size > MAX_SIZE) {
+      return NextResponse.json({ error: "File must be 1 byte - 5MB" }, { status: 400 });
     }
 
-    const ext = file.name.split(".").pop()?.toLowerCase() || "png"
-    const allowed = ["jpg", "jpeg", "png", "gif", "webp"]
-    if (!allowed.includes(ext)) {
-      return NextResponse.json({ error: "Only image files are allowed" }, { status: 400 })
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const detected = await fileTypeFromBuffer(buffer);
+    if (!detected || !ALLOWED_IMAGE_MIMES.has(detected.mime)) {
+      return NextResponse.json({ error: "Only JPEG/PNG/GIF/WebP allowed" }, { status: 400 });
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: "File must be under 5MB" }, { status: 400 })
-    }
+    const ext = detected.ext;
+    const filePath = `${authed.id}/avatar.${ext}`;
 
-    const supabase = createServerClient()
-    const filePath = `${userId}/avatar.${ext}`
-
-    // Upload to avatars bucket (upsert to overwrite)
-    const buffer = Buffer.from(await file.arrayBuffer())
+    const supabase = await createServerClient();
     const { error: uploadError } = await supabase.storage
       .from("avatars")
       .upload(filePath, buffer, {
-        contentType: file.type,
+        contentType: detected.mime,
         upsert: true,
-      })
+      });
 
     if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 500 })
+      console.error("[avatar] upload:", uploadError);
+      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from("avatars")
-      .getPublicUrl(filePath)
+    const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
+    const avatarUrl = urlData.publicUrl;
 
-    const avatarUrl = urlData.publicUrl
-
-    // Update profile
     await (supabase.from("profiles") as any)
       .update({ avatar_url: avatarUrl })
-      .eq("id", userId)
+      .eq("id", authed.id);
 
-    return NextResponse.json({ url: avatarUrl })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Upload failed" }, { status: 500 })
+    return NextResponse.json({ url: avatarUrl });
+  } catch (err) {
+    console.error("[avatar] error:", err);
+    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
   }
-}
+});
