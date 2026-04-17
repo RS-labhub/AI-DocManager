@@ -131,14 +131,65 @@ export interface AuditLog {
   created_at: string;
 }
 
-/* ─── Credentials (not directly queried via typed client usually) ── */
+/* ─── Notion-style pages ─────────────────────────────────────── */
 
-export interface Credential {
+export type PageVisibility =
+  | "private"
+  | "org"
+  | "role"
+  | "restricted"
+  | "public_link";
+
+export type PagePermission = "view" | "comment" | "edit" | "full_access";
+
+export interface Page {
   id: string;
-  user_id: string;
-  password_hash: string;
+  /** NULL for personal pages — users with no organization can still create pages. */
+  org_id: string | null;
+  owner_id: string;
+  parent_id: string | null;
+  title: string;
+  emoji: string | null;
+  cover_url: string | null;
+  cover_storage: string | null;
+  /**
+   * BlockNote document — array of block objects. We store as JSONB
+   * server-side and treat as opaque on the client; the editor owns
+   * the schema.
+   */
+  content: unknown[];
+  markdown_cache: string;
+  visibility: PageVisibility;
+  /** Only meaningful when visibility = 'role'. */
+  min_role: UserRole | null;
+  is_archived: boolean;
+  position: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface PageShare {
+  id: string;
+  page_id: string;
+  user_id: string;
+  permission: PagePermission;
+  granted_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PageInvite {
+  id: string;
+  page_id: string;
+  invitee_email: string | null;
+  invitee_user_id: string | null;
+  permission: PagePermission;
+  token_hash: string;
+  invited_by: string;
+  expires_at: string;
+  consumed_at: string | null;
+  consumed_by: string | null;
+  created_at: string;
 }
 
 /* ─── Supabase-compatible Database type ─────────────────────── */
@@ -167,12 +218,6 @@ export interface Database {
         Row: Profile;
         Insert: Partial<Profile>;
         Update: Partial<Profile>;
-        Relationships: [];
-      };
-      credentials: {
-        Row: Credential;
-        Insert: Partial<Credential>;
-        Update: Partial<Credential>;
         Relationships: [];
       };
       documents: {
@@ -217,11 +262,31 @@ export interface Database {
         Update: Partial<DocumentPassword>;
         Relationships: [];
       };
+      pages: {
+        Row: Page;
+        Insert: Partial<Page>;
+        Update: Partial<Page>;
+        Relationships: [];
+      };
+      page_shares: {
+        Row: PageShare;
+        Insert: Partial<PageShare>;
+        Update: Partial<PageShare>;
+        Relationships: [];
+      };
+      page_invites: {
+        Row: PageInvite;
+        Insert: Partial<PageInvite>;
+        Update: Partial<PageInvite>;
+        Relationships: [];
+      };
     };
     Views: {};
     Functions: {};
     Enums: {
       user_role: UserRole;
+      page_visibility: PageVisibility;
+      page_permission: PagePermission;
     };
     CompositeTypes: {};
   };

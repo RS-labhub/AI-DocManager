@@ -37,11 +37,19 @@ The default role for new accounts.
 - Manage personal API keys and profile settings
 - Add comments on documents with Comment access level or higher
 
+### Pages Access
+- Create, edit, share, and delete their own pages (`full_access` on own pages)
+- See any page in their organization whose visibility is `org`
+- See `role` pages only if their own role meets the page's minimum role
+- See `restricted` pages only when an explicit share has been granted to them
+- Can be invited to pages with `view`, `comment`, `edit`, or `full_access`
+
 ### Cannot Do
 - See other users' documents
 - Delete other users' documents
 - Manage users or access admin panels
 - Be selected as a document reviewer
+- Edit or delete pages they don't own unless a share grants it
 
 ## Admin (Weight: 50)
 
@@ -65,6 +73,12 @@ Organization administrators with expanded access.
 - Manage users in their organization
 - View organization-level audit logs
 - View organization statistics
+
+### Pages Access
+- Implicit `full_access` on every page in their organization
+- Can edit, share, change visibility, cover, archive, and delete any org page
+- Cannot see or manage personal (org-less) pages, even if the owner is in the same organization
+- Cannot see or manage pages in other organizations
 
 ## Super Admin (Weight: 75)
 
@@ -98,6 +112,12 @@ Organization administrators with elevated privileges for user management and app
 - **Cannot access other organizations' data**
 - Can only manage users within their own organization
 - Cannot assign God role or promote users to Super Admin
+
+### Pages Access
+- Implicit `full_access` on every page in their organization
+- Can edit, share, change visibility, cover, archive, and delete any org page
+- Cannot see or manage personal (org-less) pages
+- Cannot see or manage pages in other organizations
 
 ## God (Weight: 100)
 
@@ -133,6 +153,11 @@ Platform-wide control with unique multi-org capabilities.
 - Create documents in multiple organizations simultaneously
 - Can switch between organizations and view any org's data
 
+### Pages Access
+- `full_access` on every page in every organization, including personal pages
+- The only role that can see and edit pages across organizational boundaries
+- Can publish a page as a public link and revoke it at any time
+
 ## Role Assignment
 
 - New users start as User
@@ -149,3 +174,14 @@ Platform-wide control with unique multi-org capabilities.
 | Admin | Own + User docs |
 | Super Admin | Own + User + Admin docs |
 | God | Own + any public doc |
+
+## Pages Permission Summary
+
+| Role | Own pages | Other owners in same org | Personal pages (no org) | Pages in other orgs |
+|------|-----------|--------------------------|-------------------------|---------------------|
+| User | full_access | Resolved by visibility or explicit share | No access | No access |
+| Admin | full_access | Implicit full_access | No access | No access |
+| Super Admin | full_access | Implicit full_access | No access | No access |
+| God | full_access | full_access | full_access | full_access |
+
+See [Pages](pages.md) for the full visibility tiers, permission levels, and share mechanics.

@@ -23,7 +23,6 @@ const PROJECT_REF = SUPABASE_URL.replace("https://", "").replace(".supabase.co",
 const TABLES = [
   "organizations",
   "profiles",
-  "credentials",
   "documents",
   "document_comments",
   "document_passwords",

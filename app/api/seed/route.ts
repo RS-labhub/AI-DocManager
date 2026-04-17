@@ -1,19 +1,48 @@
-import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
-import bcrypt from "bcryptjs";
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { timingSafeEqual } from "crypto";
+
+export const runtime = "nodejs";
 
 const DEFAULT_PASSWORD = "Password123!";
 
-/**
- * GET /api/seed
- * Seeds the database with initial data including proper bcrypt hashes.
- * Only works if no profiles exist yet (prevents accidental re-seeding).
- */
-export async function GET() {
-  try {
-    const supabase = createServerClient();
+function checkSecret(req: NextRequest): boolean {
+  const expected = process.env.SEED_SECRET;
+  if (!expected) return false;
+  const provided = req.headers.get("x-seed-token") ?? "";
+  const a = Buffer.from(expected);
+  const b = Buffer.from(provided);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
-    // Check if already seeded
+/**
+ * POST /api/seed
+ * Seeds the database with initial demo data.
+ *
+ * Requires `x-seed-token` header matching `SEED_SECRET` env var.
+ * Refuses to run if any profile already exists.
+ */
+export async function POST(req: NextRequest) {
+  // Refuse to run in production unless explicitly opted-in. Seeding a
+  // prod DB with a known default password would be catastrophic.
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.ALLOW_PROD_SEED !== "true"
+  ) {
+    return NextResponse.json(
+      { error: "Seeding is disabled in production" },
+      { status: 403 }
+    );
+  }
+
+  if (!checkSecret(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const supabase = createAdminClient();
+
     const { data: existingProfiles } = await supabase
       .from("profiles")
       .select("id")
@@ -21,13 +50,10 @@ export async function GET() {
 
     if (existingProfiles && existingProfiles.length > 0) {
       return NextResponse.json(
-        { message: "Database already seeded. Delete all data first to re-seed." },
+        { message: "Database already seeded." },
         { status: 409 }
       );
     }
-
-    // Hash the default password
-    const hash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
 
     // ─── Organizations ─────────────────────────────────────
     const orgs = [
@@ -53,7 +79,7 @@ export async function GET() {
       { id: "40000000-0000-0000-0000-000000000004", email: "user1@initech.com", full_name: "Ivy Nguyen", role: "user" as const, org_id: "00000000-0000-0000-0000-000000000003", is_active: true },
     ];
 
-    // Create Supabase Auth users first (profiles.id references auth.users.id)
+    // Create Supabase Auth users. Password is managed by Supabase Auth.
     for (const p of profiles) {
       const { error: authErr } = await supabase.auth.admin.createUser({
         id: p.id,
@@ -62,26 +88,19 @@ export async function GET() {
         email_confirm: true,
         user_metadata: { full_name: p.full_name },
       });
-      if (authErr) throw new Error(`Auth user creation failed for ${p.email}: ${authErr.message}`);
+      if (authErr) {
+        throw new Error(`Auth user creation failed for ${p.email}: ${authErr.message}`);
+      }
     }
 
     const { error: profileErr } = await supabase.from("profiles").insert(profiles);
     if (profileErr) throw new Error(`Profile insert failed: ${profileErr.message}`);
 
-    // ─── Credentials ───────────────────────────────────────
-    const credentials = profiles.map((p) => ({
-      user_id: p.id,
-      password_hash: hash,
-    }));
-
-    const { error: credErr } = await supabase.from("credentials").insert(credentials);
-    if (credErr) throw new Error(`Credential insert failed: ${credErr.message}`);
-
     // ─── Documents ─────────────────────────────────────────
     const docs = [
       {
         title: "Getting Started Guide",
-        content: "Welcome to the AI Document Management System. This guide covers document management, AI-powered analysis, role-based access control, and organization-scoped workflows.",
+        content: "Welcome to the AI Document Management System.",
         owner_id: "20000000-0000-0000-0000-000000000001",
         org_id: "00000000-0000-0000-0000-000000000001",
         is_public: true,
@@ -89,7 +108,7 @@ export async function GET() {
       },
       {
         title: "Security Policy",
-        content: "This document outlines security policies including data encryption at rest and in transit, role-based access control with four-tier hierarchy, organization isolation, and audit logging.",
+        content: "Role-based access control, organization isolation, audit logging.",
         owner_id: "20000000-0000-0000-0000-000000000001",
         org_id: "00000000-0000-0000-0000-000000000001",
         is_public: false,
@@ -97,7 +116,7 @@ export async function GET() {
       },
       {
         title: "Product Roadmap Q1 2026",
-        content: "Q1 2026 Roadmap: Enhanced AI document parsing, multi-organization support, advanced permission management, real-time collaboration, mobile-responsive dashboard.",
+        content: "Enhanced AI parsing, multi-org support, real-time collaboration.",
         owner_id: "30000000-0000-0000-0000-000000000001",
         org_id: "00000000-0000-0000-0000-000000000001",
         is_public: false,
@@ -105,7 +124,7 @@ export async function GET() {
       },
       {
         title: "Globex Innovation Brief",
-        content: "Globex pioneers next-generation AI integration for enterprise document workflows combining fine-grained authorization with intelligent document processing.",
+        content: "Globex pioneers next-generation AI integration for enterprise workflows.",
         owner_id: "20000000-0000-0000-0000-000000000002",
         org_id: "00000000-0000-0000-0000-000000000002",
         is_public: true,
@@ -113,7 +132,7 @@ export async function GET() {
       },
       {
         title: "Initech Compliance Report",
-        content: "Annual compliance report covering GDPR, SOC2, and ISO 27001. All systems audited and meet required standards.",
+        content: "Annual compliance report covering GDPR, SOC2, and ISO 27001.",
         owner_id: "30000000-0000-0000-0000-000000000003",
         org_id: "00000000-0000-0000-0000-000000000003",
         is_public: false,
@@ -170,9 +189,9 @@ export async function GET() {
       },
     });
   } catch (err) {
-    console.error("Seed error:", err);
+    console.error("[seed] error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Seed failed" },
+      { error: "Seed failed" },
       { status: 500 }
     );
   }

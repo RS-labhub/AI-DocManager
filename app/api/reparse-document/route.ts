@@ -1,95 +1,112 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
-import { parseDocument } from "@/lib/parsers"
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase/server";
+import { parseDocument } from "@/lib/parsers";
+import { withAuth } from "@/lib/auth/require";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { isAtLeast } from "@/lib/permissions";
+import { z } from "zod";
 
-export async function POST(req: NextRequest) {
+export const runtime = "nodejs";
+
+const bodySchema = z.object({
+  documentId: z.string().uuid(),
+});
+
+export const POST = withAuth(async (authed, req: NextRequest) => {
   try {
-    const body = await req.json()
-    const { documentId } = body
+    const rl = await checkRateLimit("reparse", authed.id, 10, 300);
+    if (rl) return rl;
 
-    if (!documentId) {
+    const json = await req.json();
+    const parsed = bodySchema.safeParse(json);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "documentId is required" },
+        { error: "documentId (uuid) required" },
         { status: 400 }
-      )
+      );
     }
+    const { documentId } = parsed.data;
 
-    const supabase = createServerClient()
+    const supabase = await createServerClient();
 
-    // Fetch the document
     const { data: doc, error: docError } = await supabase
       .from("documents")
-      .select("id, file_url, file_type, title")
+      .select("id, file_url, file_type, owner_id, org_id")
       .eq("id", documentId)
-      .single()
+      .single();
 
     if (docError || !doc || !doc.file_url) {
       return NextResponse.json(
         { error: "Document not found or no file attached" },
         { status: 404 }
-      )
+      );
     }
 
-    // Extract storage path from the file URL
-    const parts = doc.file_url.split("/documents/")
+    // Authorization: owner, or admin+ within same org, or god
+    const isOwner = doc.owner_id === authed.id;
+    const isGod = authed.profile.role === "god";
+    const isAdminInOrg =
+      isAtLeast(authed.profile.role, "admin") &&
+      authed.profile.org_id === doc.org_id;
+
+    if (!isOwner && !isGod && !isAdminInOrg) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const parts = doc.file_url.split("/documents/");
     if (parts.length < 2) {
       return NextResponse.json(
         { error: "Invalid file URL format" },
         { status: 400 }
-      )
+      );
     }
-    const storagePath = parts[parts.length - 1]
+    const storagePath = parts[parts.length - 1];
 
-    // Download the file from storage
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("documents")
-      .download(storagePath)
+      .download(storagePath);
 
     if (downloadError || !fileData) {
       return NextResponse.json(
-        { error: downloadError?.message || "Failed to download file" },
+        { error: "Failed to download file" },
         { status: 500 }
-      )
+      );
     }
 
-    // Convert blob to buffer
-    const buffer = Buffer.from(await fileData.arrayBuffer())
+    const buffer = Buffer.from(await fileData.arrayBuffer());
+    const filename =
+      storagePath.split("/").pop() || `file.${doc.file_type || "txt"}`;
 
-    // Determine filename from storage path
-    const filename = storagePath.split("/").pop() || `file.${doc.file_type || "txt"}`
-
-    // Parse the document
-    const result = await parseDocument(buffer, filename)
+    const result = await parseDocument(buffer, filename);
 
     if (!result.content || result.content.trim().length === 0) {
       return NextResponse.json(
         { error: "Could not extract text content from this file" },
         { status: 422 }
-      )
+      );
     }
 
-    // Update the document with extracted content
     const { error: updateError } = await (supabase.from("documents") as any)
       .update({ content: result.content })
-      .eq("id", documentId)
+      .eq("id", documentId);
 
     if (updateError) {
       return NextResponse.json(
-        { error: updateError.message || "Failed to update document content" },
+        { error: "Failed to update document content" },
         { status: 500 }
-      )
+      );
     }
 
     return NextResponse.json({
       success: true,
       content: result.content,
       metadata: result.metadata,
-    })
+    });
   } catch (err: any) {
-    console.error("Re-parse document error:", err)
+    console.error("[reparse] error:", err);
     return NextResponse.json(
-      { error: err.message || "Failed to re-parse document" },
+      { error: "Failed to re-parse document" },
       { status: 500 }
-    )
+    );
   }
-}
+});

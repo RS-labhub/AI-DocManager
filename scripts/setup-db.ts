@@ -198,7 +198,7 @@ async function main() {
   console.log("--------------------------------------------------------");
 
   const tables = [
-    "organizations", "profiles", "credentials", "documents",
+    "organizations", "profiles", "documents",
     "ai_api_keys", "ai_agents", "ai_actions", "audit_logs",
     "document_comments", "document_passwords",
   ];

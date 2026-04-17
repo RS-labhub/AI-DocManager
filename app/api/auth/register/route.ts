@@ -1,34 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
-import bcrypt from "bcryptjs";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { syncUserToPermit } from "@/lib/permit";
+import { registerSchema } from "@/lib/schemas";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/auth/require";
+import { ZodError } from "zod";
 
+export const runtime = "nodejs";
+
+/**
+ * POST /api/auth/register
+ * Creates a Supabase Auth user + matching profile row. Password
+ * storage is handled entirely by Supabase Auth (bcrypt + salt in
+ * auth.users). We do NOT maintain our own credentials table.
+ */
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, full_name, org_code } = await req.json();
+    // Rate-limit by IP: 10 signups per hour per IP.
+    const ip = getClientIp(req) ?? "unknown";
+    const rl = await checkRateLimit("register", ip, 10, 60 * 60);
+    if (rl) return rl;
 
-    if (!email || !password || !full_name) {
-      return NextResponse.json(
-        { error: "Email, password, and full name are required" },
-        { status: 400 }
-      );
+    const raw = await req.json().catch(() => null);
+    if (!raw) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    if (password.length < 8) {
-      return NextResponse.json(
-        { error: "Password must be at least 8 characters" },
-        { status: 400 }
-      );
-    }
+    const parsed = registerSchema.parse(raw);
+    const { email, password, full_name, org_code } = parsed;
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
-    // Check if email already exists in profiles
-    const { data: existing } = await supabase
+    // Email uniqueness check (profile table is the source of truth).
+    const { data: existing } = await admin
       .from("profiles")
       .select("id")
-      .eq("email", email.toLowerCase().trim())
-      .single();
+      .eq("email", email)
+      .maybeSingle();
 
     if (existing) {
       return NextResponse.json(
@@ -37,66 +45,52 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Determine org membership and approval status
+    // Org code resolution — users joining an org require approval.
     let orgId: string | null = null;
     let approvalStatus: "pending" | "approved" = "approved";
 
     if (org_code) {
-      // Validate org code (alphanumeric)
-      const trimmedCode = org_code.trim().toUpperCase();
-      if (!/^[A-Z0-9]{4,16}$/.test(trimmedCode)) {
-        return NextResponse.json(
-          { error: "Organization code must be 4-16 alphanumeric characters" },
-          { status: 400 }
-        );
-      }
-
-      const { data: org } = await supabase
+      const { data: org } = await admin
         .from("organizations")
-        .select("id, name")
-        .eq("org_code", trimmedCode)
-        .single();
+        .select("id")
+        .eq("org_code", org_code)
+        .maybeSingle();
 
       if (!org) {
         return NextResponse.json(
-          { error: "Invalid organization code. Please check and try again." },
+          { error: "Invalid organization code" },
           { status: 404 }
         );
       }
       orgId = org.id;
-      // Users joining an org need super-admin approval
       approvalStatus = "pending";
     }
 
-    // Hash the password for the credentials table
-    const salt = await bcrypt.genSalt(12);
-    const passwordHash = await bcrypt.hash(password, salt);
-
-    // Create user in Supabase Auth (appears in Authentication → Users)
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: email.toLowerCase().trim(),
+    // Create the Supabase Auth user (password stored by Supabase).
+    const { data: authData, error: authError } = await admin.auth.admin.createUser({
+      email,
       password,
-      email_confirm: true,  // Auto-confirm, no email verification
-      user_metadata: { full_name: full_name.trim() },
+      email_confirm: true,
+      user_metadata: { full_name },
     });
 
     if (authError || !authData.user) {
-      console.error("Supabase Auth user creation error:", authError);
+      console.error("[register] createUser error:", authError);
       return NextResponse.json(
-        { error: authError?.message || "Failed to create account" },
+        { error: "Failed to create account" },
         { status: 500 }
       );
     }
 
     const userId = authData.user.id;
 
-    // Create profile (linked to auth.users.id)
-    const { data: profile, error: profileError } = await supabase
+    // Create profile row.
+    const { data: profile, error: profileError } = await admin
       .from("profiles")
       .insert({
         id: userId,
-        email: email.toLowerCase().trim(),
-        full_name: full_name.trim(),
+        email,
+        full_name,
         role: "user",
         org_id: orgId,
         approval_status: approvalStatus,
@@ -106,55 +100,46 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (profileError || !profile) {
-      // Rollback auth user
-      await supabase.auth.admin.deleteUser(userId);
-      console.error("Profile creation error:", profileError);
+      await admin.auth.admin.deleteUser(userId);
+      console.error("[register] profile insert error:", profileError);
       return NextResponse.json(
         { error: "Failed to create account" },
         { status: 500 }
       );
     }
 
-    // Store credentials (bcrypt hash for custom login flow)
-    const { error: credError } = await supabase
-      .from("credentials")
-      .insert({
-        user_id: userId,
-        password_hash: passwordHash,
-      });
-
-    if (credError) {
-      // Rollback profile + auth user
-      await supabase.from("profiles").delete().eq("id", userId);
-      await supabase.auth.admin.deleteUser(userId);
-      console.error("Credential storage error:", credError);
-      return NextResponse.json(
-        { error: "Failed to create account" },
-        { status: 500 }
-      );
-    }
-
-    // Audit log
-    await supabase.from("audit_logs").insert({
+    // Audit (best-effort).
+    await admin.from("audit_logs").insert({
       user_id: userId,
       action: "register",
       resource_type: "auth",
-      details: { method: "email", org_code: org_code || null, approval_status: approvalStatus },
+      details: { approval_status: approvalStatus, org_code: org_code ?? null },
       org_id: orgId,
+      ip_address: ip,
     });
 
-    // Sync user to Permit.io for policy-based authorization
-    await syncUserToPermit(userId, email.toLowerCase().trim(), "user", orgId);
+    // Permit.io sync (best-effort).
+    await syncUserToPermit(userId, email, "user", orgId);
 
-    return NextResponse.json({
-      user: profile,
-      pending: approvalStatus === "pending",
-      message: approvalStatus === "pending"
-        ? "Account created! Your request to join the organization is pending approval from a Super Admin."
-        : undefined,
-    }, { status: 201 });
+    return NextResponse.json(
+      {
+        user: profile,
+        pending: approvalStatus === "pending",
+        message:
+          approvalStatus === "pending"
+            ? "Account created. Your request to join the organization is pending approval."
+            : undefined,
+      },
+      { status: 201 }
+    );
   } catch (err) {
-    console.error("Registration error:", err);
+    if (err instanceof ZodError) {
+      return NextResponse.json(
+        { error: err.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+    console.error("[register] unexpected error:", err);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

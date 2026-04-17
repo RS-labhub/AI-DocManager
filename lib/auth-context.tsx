@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type ReactNode,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -17,9 +18,15 @@ import type { Profile, UserRole } from "@/lib/supabase/types";
 interface AuthContextType {
   user: Profile | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; pending?: boolean }>;
-  register: (data: RegisterData) => Promise<{ success: boolean; error?: string; pending?: boolean }>;
-  logout: () => void;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string; pending?: boolean }>;
+  register: (
+    data: RegisterData
+  ) => Promise<{ success: boolean; error?: string; pending?: boolean }>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 interface RegisterData {
@@ -31,9 +38,25 @@ interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/* ─── Public routes (no auth required) ──────────────────────── */
+/* ─── Public routes (client-side UX; server enforces via proxy) ─ */
 
-const PUBLIC_ROUTES = ["/", "/login", "/register", "/pending-approval", "/docs"];
+const PUBLIC_ROUTES = [
+  "/",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/pending-approval",
+  "/docs",
+];
+
+function isPublicRoute(pathname: string): boolean {
+  if (PUBLIC_ROUTES.includes(pathname)) return true;
+  if (pathname.startsWith("/docs/")) return true;
+  // Public shared page links — anonymous visitors are allowed here.
+  if (pathname.startsWith("/p/")) return true;
+  return false;
+}
 
 /* ─── Provider ──────────────────────────────────────────────── */
 
@@ -42,90 +65,127 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  // Restore session on mount
+  /* ─── Load profile for the current session ─── */
+  const loadProfile = useCallback(
+    async (userId: string): Promise<Profile | null> => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+      if (error || !data) return null;
+      return data as Profile;
+    },
+    [supabase]
+  );
+
+  const refresh = useCallback(async () => {
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    if (!authUser) {
+      setUser(null);
+      return;
+    }
+    const profile = await loadProfile(authUser.id);
+    if (!profile || !profile.is_active) {
+      await supabase.auth.signOut();
+      setUser(null);
+      return;
+    }
+    if (profile.approval_status === "rejected") {
+      await supabase.auth.signOut();
+      setUser(null);
+      return;
+    }
+    setUser(profile);
+  }, [supabase, loadProfile]);
+
+  /* ─── Initial load + subscribe to auth state changes ─── */
   useEffect(() => {
-    const restore = async () => {
-      try {
-        const stored = localStorage.getItem("dms_user");
-        if (stored) {
-          const parsed = JSON.parse(stored) as Profile;
-          // Verify profile still exists in DB
-          const { data } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", parsed.id)
-            .eq("is_active", true)
-            .single();
-          if (data) {
-            // Block pending/rejected users
-            if (data.approval_status === "pending" || data.approval_status === "rejected") {
-              localStorage.removeItem("dms_user");
-            } else {
-              setUser(data as Profile);
-              localStorage.setItem("dms_user", JSON.stringify(data));
-            }
-          } else {
-            localStorage.removeItem("dms_user");
-          }
-        }
-      } catch {
-        localStorage.removeItem("dms_user");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    restore();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let mounted = true;
 
-  // Route protection
+    (async () => {
+      await refresh();
+      if (mounted) setIsLoading(false);
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!session?.user) {
+        setUser(null);
+        return;
+      }
+      const profile = await loadProfile(session.user.id);
+      if (!profile || !profile.is_active) {
+        setUser(null);
+        return;
+      }
+      setUser(profile);
+    });
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [supabase, refresh, loadProfile]);
+
+  /* ─── Client-side route guidance (server enforces via proxy) ─── */
   useEffect(() => {
     if (isLoading) return;
-    const isPublic = PUBLIC_ROUTES.includes(pathname);
-    if (user && (pathname === "/login" || pathname === "/register")) {
+    if (
+      user &&
+      (pathname === "/login" ||
+        pathname === "/register" ||
+        pathname === "/forgot-password")
+    ) {
       router.push("/dashboard");
     }
-    if (!user && !isPublic) {
+    if (!user && !isPublicRoute(pathname)) {
       router.push("/login");
     }
   }, [user, isLoading, pathname, router]);
 
-  /* ─── Login ─────────────────────────────────────────────── */
-
+  /* ─── Login ───────────────────────────────────────────────── */
   const login = useCallback(
-    async (email: string, password: string): Promise<{ success: boolean; error?: string; pending?: boolean }> => {
+    async (
+      email: string,
+      password: string
+    ): Promise<{ success: boolean; error?: string; pending?: boolean }> => {
       setIsLoading(true);
       try {
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.toLowerCase().trim(),
+          password,
         });
+        if (error || !data.user) {
+          setIsLoading(false);
+          return { success: false, error: "Invalid email or password" };
+        }
 
-        const data = await res.json();
-
-        // Handle pending approval
-        if (res.status === 403 && data.approval_status === "pending") {
+        const profile = await loadProfile(data.user.id);
+        if (!profile || !profile.is_active) {
+          await supabase.auth.signOut();
+          setIsLoading(false);
+          return { success: false, error: "Account disabled" };
+        }
+        if (profile.approval_status === "rejected") {
+          await supabase.auth.signOut();
+          setIsLoading(false);
+          return { success: false, error: "Your membership request was rejected." };
+        }
+        if (profile.approval_status === "pending") {
+          // Keep them signed in (Supabase session exists) but route
+          // to the pending-approval page. The proxy + requireUser
+          // will still block their access to protected APIs.
+          setUser(profile);
           setIsLoading(false);
           router.push("/pending-approval");
-          return { success: false, pending: true, error: data.error };
+          return { success: false, pending: true };
         }
 
-        // Handle rejected
-        if (res.status === 403 && data.approval_status === "rejected") {
-          setIsLoading(false);
-          return { success: false, error: data.error };
-        }
-
-        if (!res.ok || !data.user) {
-          setIsLoading(false);
-          return { success: false, error: data.error || "Invalid email or password" };
-        }
-
-        setUser(data.user);
-        localStorage.setItem("dms_user", JSON.stringify(data.user));
+        setUser(profile);
         setIsLoading(false);
         router.push("/dashboard");
         return { success: true };
@@ -134,11 +194,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: "Network error" };
       }
     },
-    [router]
+    [supabase, loadProfile, router]
   );
 
-  /* ─── Register ──────────────────────────────────────────── */
-
+  /* ─── Register ────────────────────────────────────────────── */
   const register = useCallback(
     async (
       regData: RegisterData
@@ -149,43 +208,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(regData),
         });
-
         const result = await res.json();
-
         if (!res.ok) {
           return { success: false, error: result.error || "Registration failed" };
         }
 
-        // If user is pending approval, don't log them in
-        if (result.pending) {
-          return {
-            success: false,
-            pending: true,
-            error: result.message || "Your request to join the organization is pending approval from the Super Admin.",
-          };
+        // After server-side signup + profile creation, sign the user in
+        // client-side so the cookie session is set.
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: regData.email.toLowerCase().trim(),
+          password: regData.password,
+        });
+        if (signInErr) {
+          return { success: false, error: "Account created but login failed. Try logging in." };
         }
 
-        setUser(result.user);
-        localStorage.setItem("dms_user", JSON.stringify(result.user));
+        if (result.pending) {
+          await refresh();
+          router.push("/pending-approval");
+          return { success: false, pending: true, error: result.message };
+        }
+
+        await refresh();
         router.push("/dashboard");
         return { success: true };
       } catch {
         return { success: false, error: "Network error" };
       }
     },
-    [router]
+    [supabase, refresh, router]
   );
 
-  /* ─── Logout ────────────────────────────────────────────── */
-
-  const logout = useCallback(() => {
+  /* ─── Logout ──────────────────────────────────────────────── */
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem("dms_user");
     router.push("/login");
-  }, [router]);
+  }, [supabase, router]);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );

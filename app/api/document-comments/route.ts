@@ -1,142 +1,212 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { withAuth } from "@/lib/auth/require";
+import { createCommentSchema } from "@/lib/schemas";
+import { isAtLeast } from "@/lib/permissions";
+import type { UserRole } from "@/lib/supabase/types";
+import { ZodError, z } from "zod";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+export const runtime = "nodejs";
 
-// GET comments for a document
-export async function GET(req: NextRequest) {
+const docIdSchema = z.string().uuid();
+
+async function canAccessDocument(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  documentId: string,
+  userId: string,
+  userRole: UserRole,
+  userOrgId: string | null
+): Promise<boolean> {
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("org_id, owner_id, is_public")
+    .eq("id", documentId)
+    .single();
+  if (!doc) return false;
+  if (userRole === "god") return true;
+  if (doc.org_id !== userOrgId) return false;
+  if (doc.is_public || doc.owner_id === userId) return true;
+  // Admin+ can access non-public docs in their org
+  return isAtLeast(userRole, "admin");
+}
+
+// GET comments
+export const GET = withAuth(async (authed, req: NextRequest) => {
   try {
-    const { searchParams } = new URL(req.url)
-    const documentId = searchParams.get("documentId")
+    const { searchParams } = new URL(req.url);
+    const documentId = docIdSchema.parse(searchParams.get("documentId"));
 
-    if (!documentId) {
-      return NextResponse.json({ error: "documentId required" }, { status: 400 })
-    }
+    const supabase = await createServerClient();
+    const ok = await canAccessDocument(
+      supabase,
+      documentId,
+      authed.id,
+      authed.profile.role as UserRole,
+      authed.profile.org_id
+    );
+    if (!ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { data: comments, error } = await supabase
       .from("document_comments")
       .select("*")
       .eq("document_id", documentId)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: true });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error("[comments GET]", error);
+      return NextResponse.json({ error: "Failed to load comments" }, { status: 500 });
     }
 
-    // Get user names for comments
-    const userIds = [...new Set((comments || []).map((c: any) => c.user_id))]
-    let profiles: any[] = []
+    const userIds = [...new Set((comments ?? []).map((c: any) => c.user_id))];
+    let profiles: any[] = [];
     if (userIds.length > 0) {
-      const { data } = await supabase
+      // Admin client: we've already authorized the caller's access to
+      // the document; exposing commenter names/avatars on that document
+      // is intentional and RLS would block cross-user profile reads.
+      const admin = createAdminClient();
+      const { data } = await admin
         .from("profiles")
         .select("id, full_name, avatar_url")
-        .in("id", userIds)
-      profiles = data || []
+        .in("id", userIds);
+      profiles = data ?? [];
     }
 
-    const enriched = (comments || []).map((c: any) => {
-      const profile = profiles.find((p) => p.id === c.user_id)
+    const enriched = (comments ?? []).map((c: any) => {
+      const p = profiles.find((x) => x.id === c.user_id);
       return {
         ...c,
-        user_name: profile?.full_name || "Unknown",
-        user_avatar: profile?.avatar_url || null,
-      }
-    })
+        user_name: p?.full_name ?? "Unknown",
+        user_avatar: p?.avatar_url ?? null,
+      };
+    });
 
-    return NextResponse.json({ comments: enriched })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return NextResponse.json({ comments: enriched });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    }
+    console.error("[comments GET] error:", err);
+    return NextResponse.json({ error: "Failed to load comments" }, { status: 500 });
   }
-}
+});
 
-// POST a new comment
-export async function POST(req: NextRequest) {
+// POST
+export const POST = withAuth(async (authed, req: NextRequest) => {
   try {
-    const { documentId, userId, content, parentId } = await req.json()
+    const raw = await req.json();
+    const { documentId, content, parentId } = createCommentSchema.parse(raw);
 
-    if (!documentId || !userId || !content?.trim()) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    const supabase = await createServerClient();
+    const ok = await canAccessDocument(
+      supabase,
+      documentId,
+      authed.id,
+      authed.profile.role as UserRole,
+      authed.profile.org_id
+    );
+    if (!ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    // If a parent comment is specified it must belong to the same doc.
+    if (parentId) {
+      const { data: parent } = await supabase
+        .from("document_comments")
+        .select("document_id")
+        .eq("id", parentId)
+        .single();
+      if (!parent || parent.document_id !== documentId) {
+        return NextResponse.json({ error: "Invalid parent comment" }, { status: 400 });
+      }
     }
 
     const { data, error } = await supabase
       .from("document_comments")
       .insert({
         document_id: documentId,
-        user_id: userId,
-        content: content.trim(),
-        parent_id: parentId || null,
+        user_id: authed.id,
+        content,
+        parent_id: parentId ?? null,
       })
       .select()
-      .single()
+      .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error || !data) {
+      console.error("[comments POST]", error);
+      return NextResponse.json({ error: "Failed to post comment" }, { status: 500 });
     }
-
-    // Get user name
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name, avatar_url")
-      .eq("id", userId)
-      .single()
 
     return NextResponse.json({
       comment: {
         ...data,
-        user_name: profile?.full_name || "Unknown",
-        user_avatar: profile?.avatar_url || null,
+        user_name: authed.profile.full_name,
+        user_avatar: authed.profile.avatar_url,
       },
-    })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
-  }
-}
-
-// DELETE a comment
-export async function DELETE(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url)
-    const commentId = searchParams.get("id")
-    const userId = searchParams.get("userId")
-
-    if (!commentId || !userId) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 })
+    });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return NextResponse.json(
+        { error: err.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
     }
+    console.error("[comments POST] error:", err);
+    return NextResponse.json({ error: "Failed to post comment" }, { status: 500 });
+  }
+});
 
-    // Verify ownership or admin
+// DELETE
+export const DELETE = withAuth(async (authed, req: NextRequest) => {
+  try {
+    const { searchParams } = new URL(req.url);
+    const commentId = z.string().uuid().parse(searchParams.get("id"));
+
+    const supabase = await createServerClient();
     const { data: comment } = await supabase
       .from("document_comments")
-      .select("user_id")
+      .select("user_id, document_id")
       .eq("id", commentId)
-      .single()
+      .single();
 
     if (!comment) {
-      return NextResponse.json({ error: "Comment not found" }, { status: 404 })
+      return NextResponse.json({ error: "Comment not found" }, { status: 404 });
     }
 
-    // Check if user is comment author or admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .single()
+    const isAuthor = comment.user_id === authed.id;
+    let canModerate = false;
 
-    const isAdmin = profile?.role === "admin" || profile?.role === "super_admin" || profile?.role === "god"
-
-    if (comment.user_id !== userId && !isAdmin) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 })
+    if (!isAuthor && isAtLeast(authed.profile.role as UserRole, "admin")) {
+      // Moderator override only within the same org (god always allowed).
+      const { data: parentDoc } = await supabase
+        .from("documents")
+        .select("org_id")
+        .eq("id", comment.document_id)
+        .single();
+      if (parentDoc) {
+        canModerate =
+          authed.profile.role === "god" ||
+          parentDoc.org_id === authed.profile.org_id;
+      }
     }
 
-    await supabase
+    if (!isAuthor && !canModerate) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+
+    const { error } = await supabase
       .from("document_comments")
       .delete()
-      .eq("id", commentId)
+      .eq("id", commentId);
+    if (error) {
+      console.error("[comments DELETE]", error);
+      return NextResponse.json({ error: "Failed to delete comment" }, { status: 500 });
+    }
 
-    return NextResponse.json({ success: true })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    }
+    console.error("[comments DELETE] error:", err);
+    return NextResponse.json({ error: "Failed to delete comment" }, { status: 500 });
   }
-}
+});

@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/s
 import { Separator } from "@/components/ui/separator"
 import {
   Loader2, FileText, LayoutDashboard, Shield, Crown, LogOut,
-  ChevronDown, Settings, Key, Plus, BookOpen, Menu,
+  ChevronDown, Settings, Key, Plus, BookOpen, Menu, StickyNote,
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -33,6 +33,7 @@ export default function Navbar() {
   const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, show: !!user, exact: true },
     { href: "/dashboard/documents", label: "Documents", icon: FileText, show: !!user, exact: false },
+    { href: "/dashboard/pages", label: "Pages", icon: StickyNote, show: !!user, exact: false },
     { href: "/dashboard/users", label: "Users", icon: Shield, show: !!isAdmin, exact: false },
     { href: "/god", label: "God Panel", icon: Crown, show: !!isGod, exact: false },
   ]
@@ -59,10 +60,22 @@ export default function Navbar() {
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <div className="flex flex-col h-full">
                 {/* Mobile header */}
-                <div className="flex items-center gap-2 p-4 border-b">
-                  <Image src="/logo.png" alt="R's DocManager" width={100} height={24} className="h-6 w-auto object-contain" />
-                  <span className="text-sm font-semibold">R&apos;s DocManager</span>
-                </div>
+                <Link
+                  href="/"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 p-4 border-b hover:bg-muted/40 transition-colors"
+                  aria-label="R's DocManager — home"
+                >
+                  <Image
+                    src="/logo.png"
+                    alt=""
+                    width={100}
+                    height={24}
+                    style={{ height: 22, width: "auto" }}
+                    className="object-contain"
+                  />
+                  <span className="text-sm font-semibold tracking-tight">R&apos;s DocManager</span>
+                </Link>
 
                 {/* Mobile user info */}
                 {user && (
@@ -169,9 +182,17 @@ export default function Navbar() {
           </Sheet>
 
           {/* Desktop Logo */}
-          <Link href={user ? "/" : "/"} className="flex items-center gap-2 group">
-            <Image src="/logo.png" alt="R's DocManager" width={120} height={28} className="h-7 w-auto object-contain" priority />
-            <span className="text-sm font-semibold hidden sm:inline-block">R&apos;s DocManager</span>
+          <Link href="/" className="flex items-center gap-2 group" aria-label="R's DocManager — home">
+            <Image
+              src="/logo.png"
+              alt=""
+              width={120}
+              height={28}
+              priority
+              style={{ height: 26, width: "auto" }}
+              className="object-contain"
+            />
+            <span className="text-[13px] sm:text-sm font-semibold tracking-tight">R&apos;s DocManager</span>
           </Link>
 
           {/* Desktop Nav Links */}

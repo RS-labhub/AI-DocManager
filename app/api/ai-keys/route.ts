@@ -1,59 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { encryptApiKey, decryptApiKey } from "@/lib/encryption";
+import { encryptApiKey } from "@/lib/encryption";
+import { withAuth } from "@/lib/auth/require";
+import { createAiKeySchema } from "@/lib/schemas";
+import { ZodError, z } from "zod";
 
-/* ─── GET: list user's API keys (masked) ─────────────────────── */
+export const runtime = "nodejs";
 
-export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get("user_id");
-  if (!userId) {
-    return NextResponse.json({ error: "user_id required" }, { status: 400 });
-  }
-
-  const supabase = createServerClient();
+/* ─── GET: list the caller's API keys (metadata only, never the key) ── */
+export const GET = withAuth(async (authed) => {
+  const supabase = await createServerClient();
   const { data, error } = await supabase
     .from("ai_api_keys")
     .select("id, provider, label, is_active, created_at, updated_at")
-    .eq("user_id", userId)
+    .eq("user_id", authed.id)
     .order("created_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[ai-keys GET]", error);
+    return NextResponse.json({ error: "Failed to load keys" }, { status: 500 });
   }
+  return NextResponse.json({ keys: data ?? [] });
+});
 
-  return NextResponse.json({ keys: data });
-}
-
-/* ─── POST: store a new encrypted API key ────────────────────── */
-
-export async function POST(req: NextRequest) {
+/* ─── POST: store a new encrypted API key owned by the caller ───── */
+export const POST = withAuth(async (authed, req: NextRequest) => {
   try {
-    const { user_id, provider, api_key, label } = await req.json();
+    const raw = await req.json();
+    const { provider, api_key, label } = createAiKeySchema.parse(raw);
 
-    if (!user_id || !provider || !api_key) {
-      return NextResponse.json(
-        { error: "user_id, provider, and api_key are required" },
-        { status: 400 }
-      );
-    }
-
-    // Encrypt the API key
     const encrypted = encryptApiKey(api_key);
+    const supabase = await createServerClient();
 
-    const supabase = createServerClient();
-
-    // Deactivate existing keys for the same provider
+    // Deactivate prior keys for same provider
     await supabase
       .from("ai_api_keys")
       .update({ is_active: false })
-      .eq("user_id", user_id)
+      .eq("user_id", authed.id)
       .eq("provider", provider);
 
-    // Insert new key
     const { data, error } = await supabase
       .from("ai_api_keys")
       .insert({
-        user_id,
+        user_id: authed.id,
         provider,
         encrypted_key: encrypted.encrypted_key,
         iv: encrypted.iv,
@@ -64,53 +53,52 @@ export async function POST(req: NextRequest) {
       .select("id, provider, label, is_active, created_at")
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error || !data) {
+      console.error("[ai-keys POST]", error);
+      return NextResponse.json({ error: "Failed to store key" }, { status: 500 });
     }
 
-    // Audit
     await supabase.from("audit_logs").insert({
-      user_id,
+      user_id: authed.id,
       action: "create",
       resource_type: "ai_api_key",
       resource_id: data.id,
       details: { provider },
+      org_id: authed.profile.org_id,
     });
 
     return NextResponse.json({ key: data }, { status: 201 });
   } catch (err) {
-    console.error("API key creation error:", err);
-    return NextResponse.json(
-      { error: "Failed to store API key" },
-      { status: 500 }
-    );
+    if (err instanceof ZodError) {
+      return NextResponse.json(
+        { error: err.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+    console.error("[ai-keys POST] unexpected", err);
+    return NextResponse.json({ error: "Failed to store key" }, { status: 500 });
   }
-}
+});
 
-/* ─── DELETE: remove an API key ──────────────────────────────── */
-
-export async function DELETE(req: NextRequest) {
-  const keyId = req.nextUrl.searchParams.get("id");
-  const userId = req.nextUrl.searchParams.get("user_id");
-
-  if (!keyId || !userId) {
-    return NextResponse.json(
-      { error: "id and user_id are required" },
-      { status: 400 }
-    );
+/* ─── DELETE: remove one of the caller's API keys ─────────────── */
+export const DELETE = withAuth(async (authed, req: NextRequest) => {
+  const raw = req.nextUrl.searchParams.get("id");
+  const parsed = z.string().uuid().safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "valid id required" }, { status: 400 });
   }
+  const keyId = parsed.data;
 
-  const supabase = createServerClient();
-
+  const supabase = await createServerClient();
   const { error } = await supabase
     .from("ai_api_keys")
     .delete()
     .eq("id", keyId)
-    .eq("user_id", userId);
+    .eq("user_id", authed.id); // ownership enforced
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[ai-keys DELETE]", error);
+    return NextResponse.json({ error: "Failed to delete key" }, { status: 500 });
   }
-
   return NextResponse.json({ success: true });
-}
+});

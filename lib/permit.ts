@@ -60,24 +60,28 @@ export async function checkPermission(
   resource: PermitResource,
   context?: Record<string, unknown>
 ): Promise<boolean> {
-  try {
-    // If no token configured, fall back to local permissions
-    if (!process.env.PERMIT_SDK_TOKEN) {
-      console.warn("[Permit] No SDK token configured — using local RBAC only");
-      return true; // Caller should use local RBAC from lib/permissions.ts
-    }
+  // Permit.io is a SECONDARY / optional fine-grained layer. The
+  // primary authorization check is done locally via hasPermission()
+  // (see lib/permissions.ts) and RLS at the database layer.
+  //
+  // If no token is configured we skip this secondary check and
+  // defer to the primary checks (`true` here just means "Permit
+  // has no opinion"). Callers MUST still perform their own RBAC.
+  if (!process.env.PERMIT_SDK_TOKEN) {
+    return true;
+  }
 
+  try {
     const permitted = await permit.check(
       userId,
       action,
       { type: resource, ...(context || {}) }
     );
-
     return permitted;
   } catch (error) {
-    console.error("[Permit] Permission check failed, falling back:", error);
-    // Fail-open to local RBAC in case PDP is unreachable
-    return true;
+    console.error("[Permit] Permission check failed (fail-closed):", error);
+    // Fail CLOSED on PDP errors — deny instead of allow.
+    return false;
   }
 }
 

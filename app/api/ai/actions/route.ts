@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { decryptApiKey } from "@/lib/encryption";
+import { withAuth, getClientIp } from "@/lib/auth/require";
+import { aiActionSchema } from "@/lib/schemas";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { ZodError } from "zod";
 import OpenAI from "openai";
 
 export const runtime = "nodejs";
@@ -20,59 +24,53 @@ const PROVIDER_CONFIG: Record<string, { baseURL: string; defaultModel: string }>
   },
 };
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (authed, req: NextRequest) => {
   try {
-    const { user_id, action, title, content, provider, question } = await req.json();
+    // Rate-limit per-user: 30 AI calls / 5 minutes.
+    const rl = await checkRateLimit("ai-actions", authed.id, 30, 300);
+    if (rl) return rl;
 
-    if (!user_id || !action) {
-      return NextResponse.json(
-        { error: "user_id and action are required" },
-        { status: 400 }
-      );
-    }
+    const raw = await req.json();
+    const { action, title, content, provider, question } = aiActionSchema.parse(raw);
 
-    const selectedProvider = provider || "groq";
-    const supabase = createServerClient();
+    const selectedProvider = provider;
+    const supabase = await createServerClient();
 
-    // Fetch the user's encrypted API key
+    // Caller's own key only — never anyone else's.
     const { data: keyData } = await supabase
       .from("ai_api_keys")
-      .select("*")
-      .eq("user_id", user_id)
+      .select("encrypted_key, iv, auth_tag")
+      .eq("user_id", authed.id)
       .eq("provider", selectedProvider)
       .eq("is_active", true)
-      .single();
+      .maybeSingle();
 
     if (!keyData) {
       return NextResponse.json(
-        { error: `No active ${selectedProvider} API key found. Add one in Settings → AI Keys.` },
+        { error: `No active ${selectedProvider} API key. Add one in Settings.` },
         { status: 404 }
       );
     }
 
-    // Decrypt the key
-    const apiKey = decryptApiKey({
-      encrypted_key: keyData.encrypted_key,
-      iv: keyData.iv,
-      auth_tag: keyData.auth_tag,
-    });
+    let apiKey: string;
+    try {
+      apiKey = decryptApiKey({
+        encrypted_key: keyData.encrypted_key,
+        iv: keyData.iv,
+        auth_tag: keyData.auth_tag,
+      });
+    } catch (err) {
+      console.error("[ai/actions] decrypt failed", err);
+      return NextResponse.json({ error: "Stored key is invalid — please re-enter it" }, { status: 500 });
+    }
 
     const config = PROVIDER_CONFIG[selectedProvider];
     if (!config) {
-      return NextResponse.json(
-        { error: `Unsupported provider: ${selectedProvider}` },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Unsupported provider" }, { status: 400 });
     }
 
-    // Create OpenAI-compatible client
-    const client = new OpenAI({
-      apiKey,
-      baseURL: config.baseURL,
-    });
-
-    // Build prompts based on action
-    const { systemPrompt, userPrompt } = buildPrompts(action, title || "", content || "", question || "");
+    const client = new OpenAI({ apiKey, baseURL: config.baseURL });
+    const { systemPrompt, userPrompt } = buildPrompts(action, title ?? "", content ?? "", question);
 
     const completion = await client.chat.completions.create({
       model: config.defaultModel,
@@ -86,15 +84,27 @@ export async function POST(req: NextRequest) {
 
     const result = completion.choices[0]?.message?.content || "No response generated";
 
+    await supabase.from("audit_logs").insert({
+      user_id: authed.id,
+      action: "ai_action",
+      resource_type: "ai_action",
+      details: { action, provider: selectedProvider },
+      org_id: authed.profile.org_id,
+      ip_address: getClientIp(req),
+    });
+
     return NextResponse.json({ success: true, result });
   } catch (err) {
-    console.error("AI action error:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "AI action failed" },
-      { status: 500 }
-    );
+    if (err instanceof ZodError) {
+      return NextResponse.json(
+        { error: err.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+    console.error("[ai/actions] error:", err);
+    return NextResponse.json({ error: "AI action failed" }, { status: 500 });
   }
-}
+});
 
 function buildPrompts(
   action: string,

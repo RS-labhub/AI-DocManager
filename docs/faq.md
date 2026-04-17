@@ -95,3 +95,7 @@ Super Admins can promote you up to Admin. God users can assign any role.
 ### What is the default classification for each role?
 
 God defaults to Public with Comment access. Admin, Super Admin, and User default to Organization classification.
+
+## See also
+
+- [Pages](pages.md) — full guide to the Notion-style pages feature
