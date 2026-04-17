@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/s
 import { Separator } from "@/components/ui/separator"
 import {
   Loader2, FileText, LayoutDashboard, Shield, Crown, LogOut,
-  ChevronDown, Settings, Key, Plus, BookOpen, Menu,
+  ChevronDown, Settings, Key, Plus, BookOpen, Menu, StickyNote,
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -33,6 +33,7 @@ export default function Navbar() {
   const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, show: !!user, exact: true },
     { href: "/dashboard/documents", label: "Documents", icon: FileText, show: !!user, exact: false },
+    { href: "/dashboard/pages", label: "Pages", icon: StickyNote, show: !!user, exact: false },
     { href: "/dashboard/users", label: "Users", icon: Shield, show: !!isAdmin, exact: false },
     { href: "/god", label: "God Panel", icon: Crown, show: !!isGod, exact: false },
   ]

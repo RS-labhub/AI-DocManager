@@ -111,3 +111,65 @@ export const uploadDocumentQuerySchema = z.object({
 export const documentFileQuerySchema = z.object({
   documentId: uuid,
 });
+
+/* ─── Pages ──────────────────────────────────────────────────── */
+
+export const pageVisibilitySchema = z.enum([
+  "private",
+  "org",
+  "role",
+  "restricted",
+  "public_link",
+]);
+
+export const pagePermissionSchema = z.enum([
+  "view",
+  "comment",
+  "edit",
+  "full_access",
+]);
+
+export const userRoleSchema = z.enum(["god", "super_admin", "admin", "user"]);
+
+/**
+ * BlockNote document — opaque on the server. We bound size and
+ * shape: an array of objects, max 10MB serialized. The editor
+ * owns the schema; the server doesn't try to validate block
+ * contents (would couple us to a specific BlockNote version).
+ */
+export const blockTreeSchema = z
+  .array(z.unknown())
+  .max(5000, "Page is too large");
+
+export const createPageSchema = z.object({
+  title: z.string().min(1).max(200).trim().default("Untitled"),
+  emoji: z.string().max(16).nullable().optional(),
+  parent_id: uuid.nullable().optional(),
+  content: blockTreeSchema.optional(),
+  markdown_cache: z.string().max(2_000_000).optional(),
+  visibility: pageVisibilitySchema.default("org"),
+  min_role: userRoleSchema.nullable().optional(),
+  cover_url: z.string().url().max(2048).nullable().optional(),
+});
+
+export const updatePageSchema = z.object({
+  title: z.string().min(1).max(200).trim().optional(),
+  emoji: z.string().max(16).nullable().optional(),
+  content: blockTreeSchema.optional(),
+  markdown_cache: z.string().max(2_000_000).optional(),
+  visibility: pageVisibilitySchema.optional(),
+  min_role: userRoleSchema.nullable().optional(),
+  cover_url: z.string().url().max(2048).nullable().optional(),
+  is_archived: z.boolean().optional(),
+});
+
+export const upsertShareSchema = z.object({
+  user_id: uuid,
+  permission: pagePermissionSchema,
+});
+
+export const importPageSchema = z.object({
+  title: z.string().min(1).max(200).trim().optional(),
+  markdown: z.string().min(1).max(2_000_000),
+  visibility: pageVisibilitySchema.default("org"),
+});

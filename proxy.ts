@@ -44,6 +44,10 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/_next/")) return true;
   if (pathname.startsWith("/favicon")) return true;
   if (pathname.startsWith("/public/")) return true;
+  // Shared "public link" page view + its JSON endpoint.
+  if (pathname.startsWith("/p/")) return true;
+  // /api/pages/<uuid>/public — anonymous read of a public-link page.
+  if (/^\/api\/pages\/[^/]+\/public$/.test(pathname)) return true;
   for (const p of PUBLIC_API_PREFIXES) {
     if (pathname === p || pathname.startsWith(p + "/")) return true;
   }

@@ -3,7 +3,11 @@
    god > super_admin > admin > user
    ───────────────────────────────────────────────────────────── */
 
-import type { UserRole } from "@/lib/supabase/types";
+import type {
+  PagePermission,
+  PageVisibility,
+  UserRole,
+} from "@/lib/supabase/types";
 
 /** Numeric weight for role comparison (higher = more powerful) */
 const ROLE_WEIGHT: Record<UserRole, number> = {
@@ -27,6 +31,7 @@ export function isAtLeast(roleA: UserRole, roleB: UserRole): boolean {
 
 export const RESOURCES = {
   DOCUMENT: "document",
+  PAGE: "page",
   ORGANIZATION: "organization",
   USER: "user",
   AI_AGENT: "ai_agent",
@@ -157,6 +162,100 @@ export function hasPermission(
   }
 
   return false;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PAGE permission resolution
+
+   Mirrors the `public.page_permission_for(pages)` SQL function so
+   server routes (and the client UI for hint/affordance purposes)
+   can compute the same answer without a round-trip. RLS in the
+   database remains the source of truth — this helper exists only
+   for clean error messages and conditional UI.
+   ───────────────────────────────────────────────────────────── */
+
+const PERMISSION_RANK: Record<PagePermission, number> = {
+  view: 1,
+  comment: 2,
+  edit: 3,
+  full_access: 4,
+};
+
+/** True if `granted` is at least as strong as `required`. */
+export function permissionAtLeast(
+  granted: PagePermission | null | undefined,
+  required: PagePermission
+): boolean {
+  if (!granted) return false;
+  return PERMISSION_RANK[granted] >= PERMISSION_RANK[required];
+}
+
+export interface PageAccessInput {
+  page: {
+    owner_id: string;
+    /** Null for personal pages (users without an organization). */
+    org_id: string | null;
+    visibility: PageVisibility;
+    min_role: UserRole | null;
+  };
+  user: {
+    id: string;
+    role: UserRole;
+    org_id: string | null;
+  };
+  /** Caller's explicit share, if any. */
+  share?: { permission: PagePermission } | null;
+}
+
+/**
+ * Resolve the highest permission a user has on a page, or `null` if
+ * they have no access at all. This MUST stay in lockstep with the
+ * `page_permission_for` SQL function in supabase/schema.sql.
+ */
+export function resolvePagePermission(
+  input: PageAccessInput
+): PagePermission | null {
+  const { page, user, share } = input;
+
+  // god gets full_access on everything
+  if (user.role === "god") return "full_access";
+
+  // owner is always full_access
+  if (page.owner_id === user.id) return "full_access";
+
+  // explicit share always wins (and may grant access across visibility tiers)
+  if (share) return share.permission;
+
+  // Personal pages (no org) have no shares, no admin elevation —
+  // only owner and god (handled above) see them.
+  if (page.org_id === null) return null;
+
+  // super_admin / admin within the same org get implicit full_access
+  if (
+    page.org_id === user.org_id &&
+    (user.role === "super_admin" || user.role === "admin")
+  ) {
+    return "full_access";
+  }
+
+  // remaining checks require same-org membership
+  if (page.org_id !== user.org_id) return null;
+
+  switch (page.visibility) {
+    case "private":
+      return null;
+    case "org":
+      return "view";
+    case "role":
+      if (!page.min_role) return null;
+      return isAtLeast(user.role, page.min_role) ? "view" : null;
+    case "restricted":
+      return null;
+    case "public_link":
+      // Public-link reads happen via signed-token API routes, not via
+      // direct authenticated DB reads.
+      return null;
+  }
 }
 
 /** Label & color for role badges */

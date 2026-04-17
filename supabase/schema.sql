@@ -639,12 +639,392 @@ CREATE POLICY "storage_service_role" ON storage.objects
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- ══════════════════════════════════════════════════════════════
+-- 8. Notion-style PAGES
+--    A separate, content-first surface from `documents`. Each page
+--    has a JSONB block tree (BlockNote native format) plus an
+--    optional cached markdown export for AI/search/round-tripping.
+--    Visibility is controlled by `visibility` (default 'org') and
+--    explicit per-user shares in `page_shares`.
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TYPE page_visibility AS ENUM (
+  'private',     -- only the owner (and god/super-admin of org for safety)
+  'org',         -- everyone in the page's org
+  'role',        -- members at or above min_role within the org
+  'restricted',  -- only people listed in page_shares (+ owner)
+  'public_link'  -- anyone with the signed link (read-only); reserved for later
+);
+
+CREATE TYPE page_permission AS ENUM (
+  'view',
+  'comment',
+  'edit',
+  'full_access'  -- can manage shares + delete
+);
+
+-- 8.1 pages
+--     org_id is nullable to support "personal" pages for users who
+--     don't belong to an organization. Personal pages are always
+--     private by construction — only the owner (and god) can see
+--     them; sharing/org/role visibility options are reserved for
+--     org-scoped pages.
+CREATE TABLE pages (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id          UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  owner_id        UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  parent_id       UUID REFERENCES pages(id) ON DELETE CASCADE,
+  title           TEXT NOT NULL DEFAULT 'Untitled',
+  emoji           TEXT,                                       -- single grapheme; client-validated
+  cover_url       TEXT,                                       -- signed/external URL
+  cover_storage   TEXT,                                       -- bucket path if uploaded; null if external
+  content         JSONB NOT NULL DEFAULT '[]'::jsonb,         -- BlockNote document
+  markdown_cache  TEXT NOT NULL DEFAULT '',                   -- regenerated on save for AI/search/export
+  visibility      page_visibility NOT NULL DEFAULT 'org',
+  min_role        user_role,                                  -- only meaningful when visibility = 'role'
+  is_archived     BOOLEAN NOT NULL DEFAULT false,
+  position        INTEGER NOT NULL DEFAULT 0,                 -- sort within parent
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  updated_at      TIMESTAMPTZ DEFAULT now(),
+  CHECK (char_length(title) <= 200),
+  CHECK (emoji IS NULL OR char_length(emoji) <= 16),
+  CHECK (visibility <> 'role' OR min_role IS NOT NULL),
+  -- Personal pages (no org) can be 'private' or 'public_link' only.
+  -- Org-scoped visibilities (org / role / restricted) require an org.
+  CHECK (org_id IS NOT NULL OR visibility IN ('private', 'public_link'))
+);
+
+-- 8.2 page_shares — explicit per-user grants
+--     Used by visibility = 'restricted', and as overrides for
+--     'org' / 'role' (a share with a higher permission wins).
+CREATE TABLE page_shares (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  page_id     UUID NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+  user_id     UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  permission  page_permission NOT NULL DEFAULT 'view',
+  granted_by  UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at  TIMESTAMPTZ DEFAULT now(),
+  updated_at  TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (page_id, user_id)
+);
+
+-- 8.3 page_invites — pending invites (registered users not yet sharing the page,
+--     and external email invites for non-members; consumed when the invitee
+--     visits the page link or signs up). Phase 1 stores them; the consumption
+--     flow lands in a follow-up.
+CREATE TABLE page_invites (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  page_id         UUID NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+  invitee_email   CITEXT,                                    -- normalized (citext extension required, see below)
+  invitee_user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  permission      page_permission NOT NULL DEFAULT 'view',
+  token_hash      TEXT NOT NULL UNIQUE,                      -- sha256 of the invite token; raw token never stored
+  invited_by      UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  expires_at      TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '14 days'),
+  consumed_at     TIMESTAMPTZ,
+  consumed_by     UUID REFERENCES profiles(id),
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  CHECK (invitee_email IS NOT NULL OR invitee_user_id IS NOT NULL)
+);
+
+-- citext for case-insensitive email matching on invites.
+CREATE EXTENSION IF NOT EXISTS citext;
+
+-- ── idempotent constraint fix ────────────────────────────────
+-- The original pages table had a CHECK that only allowed 'private'
+-- for personal pages (org_id IS NULL). We want to allow 'public_link'
+-- too so users can share a personal page by link. This block drops
+-- any pre-existing "org_id + visibility" CHECK regardless of its
+-- auto-generated name and re-adds the relaxed version. Safe on
+-- fresh installs (finds nothing to drop).
+DO $personal_vis_fix$
+DECLARE
+  r record;
+BEGIN
+  FOR r IN
+    SELECT c.conname
+    FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    WHERE t.relname = 'pages'
+      AND c.contype = 'c'
+      AND pg_get_constraintdef(c.oid) ILIKE '%org_id IS NOT NULL%visibility%'
+  LOOP
+    EXECUTE format('ALTER TABLE pages DROP CONSTRAINT %I', r.conname);
+  END LOOP;
+
+  -- Drop our own name too if it already exists (idempotency).
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    WHERE t.relname = 'pages'
+      AND c.conname = 'pages_personal_visibility_check'
+  ) THEN
+    ALTER TABLE pages DROP CONSTRAINT pages_personal_visibility_check;
+  END IF;
+
+  ALTER TABLE pages
+    ADD CONSTRAINT pages_personal_visibility_check
+    CHECK (org_id IS NOT NULL OR visibility IN ('private', 'public_link'));
+END $personal_vis_fix$;
+
+-- ── indexes ──────────────────────────────────────────────────
+CREATE INDEX idx_pages_org             ON pages(org_id);
+CREATE INDEX idx_pages_owner           ON pages(owner_id);
+CREATE INDEX idx_pages_parent          ON pages(parent_id);
+CREATE INDEX idx_pages_visibility      ON pages(visibility);
+CREATE INDEX idx_pages_archived        ON pages(is_archived);
+CREATE INDEX idx_page_shares_page      ON page_shares(page_id);
+CREATE INDEX idx_page_shares_user      ON page_shares(user_id);
+CREATE INDEX idx_page_invites_page     ON page_invites(page_id);
+CREATE INDEX idx_page_invites_email    ON page_invites(invitee_email);
+CREATE INDEX idx_page_invites_userid   ON page_invites(invitee_user_id);
+
+-- ── updated_at triggers ──────────────────────────────────────
+CREATE TRIGGER trg_pages_updated         BEFORE UPDATE ON pages        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_page_shares_updated   BEFORE UPDATE ON page_shares  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ══════════════════════════════════════════════════════════════
+-- 9. SECURITY DEFINER helper for page access resolution
+--    Centralizes the "can this user see/edit this page" rule so
+--    the RLS policies below are short and readable. Returns the
+--    highest-resolved permission level ('full_access' > 'edit' >
+--    'comment' > 'view') or NULL if no access.
+-- ══════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.page_permission_for(p pages)
+RETURNS page_permission
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+DECLARE
+  uid           UUID := auth.uid();
+  caller_role   user_role;
+  caller_org    UUID;
+  share_perm    page_permission;
+BEGIN
+  IF uid IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  -- god gets full_access on everything everywhere
+  IF public.current_role_is('god') THEN
+    RETURN 'full_access'::page_permission;
+  END IF;
+
+  SELECT role, org_id INTO caller_role, caller_org
+  FROM profiles
+  WHERE id = uid;
+
+  -- inactive / pending profiles: no access
+  IF caller_role IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  -- owner is always full_access
+  IF p.owner_id = uid THEN
+    RETURN 'full_access'::page_permission;
+  END IF;
+
+  -- explicit share always wins (and may grant access across visibility tiers).
+  SELECT permission INTO share_perm
+  FROM page_shares
+  WHERE page_id = p.id AND user_id = uid;
+  IF share_perm IS NOT NULL THEN
+    RETURN share_perm;
+  END IF;
+
+  -- Personal pages (org_id IS NULL): only the owner and god
+  -- (already handled above) can access them. Shares + admin
+  -- elevation do not apply — the page lives outside any org
+  -- governance.
+  IF p.org_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  -- super_admin / admin within the page's org: implicit full_access
+  -- (so super-admins can never be locked out of org content).
+  IF p.org_id = caller_org AND caller_role IN ('super_admin', 'admin') THEN
+    RETURN 'full_access'::page_permission;
+  END IF;
+
+  -- All remaining checks require same-org membership.
+  IF p.org_id IS DISTINCT FROM caller_org THEN
+    RETURN NULL;
+  END IF;
+
+  -- private: only owner / shares / admins (already handled above)
+  IF p.visibility = 'private' THEN
+    RETURN NULL;
+  END IF;
+
+  -- org: everyone in the same org gets view
+  IF p.visibility = 'org' THEN
+    RETURN 'view'::page_permission;
+  END IF;
+
+  -- role: only members at or above min_role
+  IF p.visibility = 'role' THEN
+    IF p.min_role IS NULL THEN RETURN NULL; END IF;
+    IF public.current_role_is(p.min_role) THEN
+      RETURN 'view'::page_permission;
+    END IF;
+    RETURN NULL;
+  END IF;
+
+  -- restricted: must be in page_shares (already handled above)
+  IF p.visibility = 'restricted' THEN
+    RETURN NULL;
+  END IF;
+
+  -- public_link: handled out-of-band by signed-token API routes,
+  -- not by direct DB reads from authenticated users.
+  RETURN NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.page_permission_for(pages) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.page_permission_for(pages) TO authenticated;
+
+-- ══════════════════════════════════════════════════════════════
+-- 10. RLS for pages / page_shares / page_invites
+-- ══════════════════════════════════════════════════════════════
+
+ALTER TABLE pages         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE page_shares   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE page_invites  ENABLE ROW LEVEL SECURITY;
+
+-- service_role passthrough
+CREATE POLICY "service_role_full_access" ON pages
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_role_full_access" ON page_shares
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_role_full_access" ON page_invites
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- ── pages policies ───────────────────────────────────────────
+CREATE POLICY "page_read_resolved" ON pages
+  FOR SELECT TO authenticated
+  USING (public.page_permission_for(pages.*) IS NOT NULL);
+
+CREATE POLICY "page_insert_owner_in_own_org" ON pages
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    owner_id = auth.uid()
+    AND public.current_role_is('user')
+    AND (
+      -- Organization-scoped page: must match the caller's org.
+      org_id = public.current_org_id()
+      -- Personal page: no org, must be private.
+      OR (org_id IS NULL AND visibility = 'private')
+    )
+  );
+
+CREATE POLICY "page_update_if_edit_or_above" ON pages
+  FOR UPDATE TO authenticated
+  USING (
+    public.page_permission_for(pages.*) IN ('edit'::page_permission, 'full_access'::page_permission)
+  )
+  WITH CHECK (
+    public.page_permission_for(pages.*) IN ('edit'::page_permission, 'full_access'::page_permission)
+  );
+
+CREATE POLICY "page_delete_if_full_access" ON pages
+  FOR DELETE TO authenticated
+  USING (
+    public.page_permission_for(pages.*) = 'full_access'::page_permission
+  );
+
+-- ── page_shares policies ─────────────────────────────────────
+-- Read: a user can read shares for pages they can see.
+CREATE POLICY "page_share_read_if_can_read_page" ON page_shares
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM pages p
+      WHERE p.id = page_shares.page_id
+        AND public.page_permission_for(p.*) IS NOT NULL
+    )
+    OR user_id = auth.uid()
+  );
+
+-- Insert/update/delete: only owners / full_access can manage shares.
+CREATE POLICY "page_share_manage_if_full_access" ON page_shares
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM pages p
+      WHERE p.id = page_shares.page_id
+        AND public.page_permission_for(p.*) = 'full_access'::page_permission
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM pages p
+      WHERE p.id = page_shares.page_id
+        AND public.page_permission_for(p.*) = 'full_access'::page_permission
+    )
+  );
+
+-- ── page_invites policies ────────────────────────────────────
+-- Read: invitee themselves (matched by email), or page managers.
+CREATE POLICY "page_invite_read_relevant" ON page_invites
+  FOR SELECT TO authenticated
+  USING (
+    invitee_user_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM pages p
+      WHERE p.id = page_invites.page_id
+        AND public.page_permission_for(p.*) = 'full_access'::page_permission
+    )
+  );
+
+CREATE POLICY "page_invite_manage_if_full_access" ON page_invites
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM pages p
+      WHERE p.id = page_invites.page_id
+        AND public.page_permission_for(p.*) = 'full_access'::page_permission
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM pages p
+      WHERE p.id = page_invites.page_id
+        AND public.page_permission_for(p.*) = 'full_access'::page_permission
+    )
+  );
+
+-- ══════════════════════════════════════════════════════════════
+-- 11. Storage bucket: page-covers (private; signed URLs only)
+-- ══════════════════════════════════════════════════════════════
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'page-covers',
+  'page-covers',
+  false,
+  10485760,  -- 10MB
+  ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- All access is gated through the /api/pages/[id]/cover route
+-- (which itself enforces page_permission_for). Direct authenticated
+-- access is denied; only service_role policy applies.
+CREATE POLICY "page_covers_service_only" ON storage.objects
+  FOR ALL TO service_role
+  USING (bucket_id = 'page-covers')
+  WITH CHECK (bucket_id = 'page-covers');
+
+-- ══════════════════════════════════════════════════════════════
 --  Post-install sanity check
 --    SELECT relname, relrowsecurity FROM pg_class
 --    WHERE relname IN (
 --      'organizations','profiles','documents','document_comments',
 --      'document_passwords','ai_api_keys','ai_agents','ai_actions',
---      'audit_logs'
+--      'audit_logs','pages','page_shares','page_invites'
 --    );
 --  All should have relrowsecurity = true.
 -- ══════════════════════════════════════════════════════════════

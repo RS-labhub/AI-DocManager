@@ -53,6 +53,8 @@ const PUBLIC_ROUTES = [
 function isPublicRoute(pathname: string): boolean {
   if (PUBLIC_ROUTES.includes(pathname)) return true;
   if (pathname.startsWith("/docs/")) return true;
+  // Public shared page links — anonymous visitors are allowed here.
+  if (pathname.startsWith("/p/")) return true;
   return false;
 }
 
