@@ -2,16 +2,19 @@
 
 ![banner](public/og.png)
 
-A secure, AI-powered document management platform with multi-organization support, 4-tier role-based access control, document viewers, reviewer workflows, and encrypted API key storage.
+A secure, AI-powered document management platform with multi-organization support, 4-tier role-based access control, document viewers, reviewer workflows, Notion-style rich pages, and encrypted API key storage.
 
 ## Features
 
 - Document upload (PDF, DOCX, TXT, MD, CSV, HTML, JSON) and rich Markdown editor
 - Embedded PDF viewer, Word document viewer, Markdown rendered preview, plain text display
 - Automatic text extraction for DOCX, TXT, MD, HTML, JSON files on upload
+- Notion-style block editor for Pages: autosave, emoji, cover images, Markdown import and export
+- 5-tier page visibility (Private, Organization, Role, Restricted, Public link) with per-user share grants
+- Public page links served at `/p/<id>` with no sign-in required, revocable at any time
 - AI actions: Summarize, Analyze, Improve, Keywords, Translate, Q&A, Insights (Groq/OpenAI/Anthropic)
 - Free local tools: Word Count, Structure Analysis, Text Preview (no API key required)
-- 4-tier roles: God, Super Admin, Admin, User with hierarchical permissions
+- 4-tier roles: God, Super Admin, Admin, User with hierarchical permissions on documents and pages
 - Document classification: Organization, Public, Internal, Confidential, General
 - Access levels: View Only, Comment, Edit, Full Access
 - Document lifecycle: Draft, Under Review, Published, Archived
@@ -36,6 +39,7 @@ A secure, AI-powered document management platform with multi-organization suppor
 | UI | shadcn/ui + Tailwind CSS |
 | AI Providers | Groq, OpenAI, Anthropic |
 | Parsing | pdf-parse, mammoth |
+| Page Editor | BlockNote (Mantine theme) |
 
 ## Documentation
 
@@ -51,7 +55,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture, data
 
 <div align="center">
 
-**Built with ❤️ by [Rohan Sharma](https://github.com/RS-labhub). Named after Radhika Sharma.**
+**Built by [Rohan Sharma](https://github.com/RS-labhub)**
 
 ![author](public/author.jpg)
 

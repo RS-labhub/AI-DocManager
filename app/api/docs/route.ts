@@ -24,9 +24,10 @@ function slugify(text: string): string {
 
 function parseHeadings(content: string): HeadingInfo[] {
   const headings: HeadingInfo[] = [];
-  const lines = content.split("\n");
+  // Normalize line endings so CRLF files (Windows) parse the same as LF files.
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
   for (const line of lines) {
-    const match = line.match(/^(#{1,4})\s+(.+)$/);
+    const match = line.match(/^(#{1,4})\s+(.+?)\s*$/);
     if (match) {
       const level = match[1].length;
       const text = match[2].trim();
@@ -47,6 +48,7 @@ const DOC_ORDER = [
   "overview",
   "getting-started",
   "documents",
+  "pages",
   "roles",
   "organizations",
   "ai-features",
@@ -72,8 +74,9 @@ export async function GET(request: NextRequest) {
     for (const file of files) {
       const filePath = path.join(docsDir, file);
       const raw = fs.readFileSync(filePath, "utf-8");
-      // Strip BOM if present
-      const content = raw.replace(/^\uFEFF/, "");
+      // Strip BOM and normalize line endings so Windows (CRLF) and Unix (LF)
+      // files are treated identically by downstream parsers.
+      const content = raw.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
       const slug = file.replace(".md", "");
       const title = extractTitle(content);
       const headings = parseHeadings(content);

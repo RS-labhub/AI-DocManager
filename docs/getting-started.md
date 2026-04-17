@@ -50,6 +50,7 @@ After logging in, you will see:
 |------|-------------|
 | Dashboard | Your personal overview |
 | Documents | Browse and search all documents with tabs |
+| Pages | Open the Notion-style page editor with the sidebar page list |
 | Users | Manage organization users (admin and above) |
 | God Panel | Platform-wide control (god only) |
 | Docs | This documentation |
@@ -75,6 +76,19 @@ Note: Local tools (Word Count, Structure Analysis, Preview) work without any API
 7. Optionally assign reviewers (for Under Review status) and reference other documents
 8. Click "Create Document"
 
+## Your First Page
+
+Pages are the Notion-style block editor for notes, specs, and wikis — no file upload required.
+
+1. Go to **Dashboard → Pages**
+2. Click **New page** in the sidebar
+3. Start typing — changes are saved automatically
+4. Optionally add an emoji and a cover image from the header
+5. Click **Share** to change who can see the page (Private, Organization, Role, Restricted, or Public link)
+6. Invite specific teammates by email with view / comment / edit / full access permissions
+
+To bring existing notes in, click **Import** in the sidebar and upload a `.md` file (up to 2 MB). See the [Pages](pages.md) guide for the full visibility model and permission rules.
+
 ## Understanding Document Tabs
 
 After creating documents, you can find them in different tabs:
@@ -84,3 +98,7 @@ After creating documents, you can find them in different tabs:
 - Review: documents with status Under Review
 - Archived: your own archived documents
 - For Me: documents where you are assigned as a reviewer
+
+## See also
+
+- [Pages](pages.md) — create rich block-based pages with granular sharing

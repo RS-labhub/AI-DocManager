@@ -46,3 +46,7 @@ using this app, you agree to what's below.
 ## Contact
 
 Questions? Reach the creator via the [About the creator](/docs) page.
+
+## See also
+
+- [Pages](pages.md) — what you can and can't share via public page links

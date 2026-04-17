@@ -457,6 +457,11 @@ export function PageSidebar({ onNavigate, className }: PageSidebarProps) {
           type="button"
           onClick={() => setShowArchived((v) => !v)}
           className="w-full flex items-center gap-2 text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded transition-colors"
+          // Browser form-filler extensions inject `fdprocessedid` on
+          // buttons before React hydrates, which trips React's
+          // attribute-mismatch warning. The attribute is cosmetic and
+          // safe to ignore for this button.
+          suppressHydrationWarning
         >
           <Archive className="h-3 w-3" />
           {showArchived ? "Hide archived" : "Show archived"}

@@ -65,3 +65,7 @@ Your document content is sent to the AI provider you configured. R's DocManager 
 - Groq is free and fast, great for getting started
 - Longer documents produce better summaries
 - Custom prompts are the most flexible option
+
+## See also
+
+- [Pages](pages.md) — rich-text pages where you can paste AI output and keep iterating

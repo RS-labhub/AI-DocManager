@@ -74,3 +74,7 @@ God-role users can create documents in specific organizations or all organizatio
 | View/regenerate org codes | God only |
 | Create docs in other orgs | God only |
 | Manage org settings | God only |
+
+## See also
+
+- [Pages](pages.md) — how per-org and per-user page sharing works

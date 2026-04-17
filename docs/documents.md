@@ -184,3 +184,7 @@ Comments are available on documents with access level Comment, Edit, or Full Acc
 - Post new comments (Ctrl+Enter to send)
 - Delete your own comments (or any comment if Admin+)
 - View Only documents do not show the comment button
+
+## See also
+
+- [Pages](pages.md) — a lighter, editor-first alternative for notes and collaborative writing

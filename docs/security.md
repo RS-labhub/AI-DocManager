@@ -49,3 +49,7 @@ AI provider API keys use AES-256-GCM encryption:
 ## Audit trail
 
 All significant actions are logged: document changes, role changes, login events, and organization modifications.
+
+## See also
+
+- [Pages](pages.md) — page-level permission rules, public-link safety, and audit events

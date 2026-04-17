@@ -55,3 +55,7 @@ See [Security and Privacy](/docs) for the full details on authentication, encryp
 ## Changes
 
 Privacy practices can change as features evolve. Material changes will be announced inside the app where practical.
+
+## See also
+
+- [Pages](pages.md) — what is stored for pages, cover images, and public links

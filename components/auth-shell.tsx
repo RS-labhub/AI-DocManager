@@ -115,7 +115,7 @@ export function AuthFooterText() {
       >
         Rohan Sharma
       </a>{" "}
-      in search of Radhika Sharma
+      in hope of love
     </p>
   )
 }

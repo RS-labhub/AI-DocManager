@@ -45,7 +45,7 @@ export function AppFooter() {
           >
             <u>Rohan Sharma</u>
           </a>{" "}
-          in search of Radhika Sharma
+          in hope of love
         </p>
       </div>
     </footer>
