@@ -30,7 +30,7 @@ A secure, AI-powered document management platform with multi-organization suppor
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 14 (App Router) |
+| Framework | Next.js 16+ (App Router) |
 | Runtime | Bun |
 | Language | TypeScript |
 | Database | Supabase (PostgreSQL) |
