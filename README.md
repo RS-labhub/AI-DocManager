@@ -1,4 +1,4 @@
-# Radhika's DocManager
+# R's DocManager
 
 ![banner](public/og.png)
 
@@ -45,7 +45,7 @@ A secure, AI-powered document management platform with multi-organization suppor
 
 Full documentation is available in the `/docs` folder.
 
-Find here: https://radhika-docmanager.vercel.app/docs
+Find here: https://rs-docmanager.vercel.app/docs
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture, database schema, and detailed role/permission documentation.
 
@@ -59,6 +59,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture, data
 
 ![author](public/author.jpg)
 
-[⭐ Star](https://github.com/RS-labhub/radhika) • [🐛 Issues](https://github.com/RS-labhub/radhika/issues) • [🗣️ Discussions](https://github.com/RS-labhub/radhika/discussions)
+[⭐ Star](https://github.com/RS-labhub/rs-docmanager) • [🐛 Issues](https://github.com/RS-labhub/rs-docmanager/issues) • [🗣️ Discussions](https://github.com/RS-labhub/rs-docmanager/discussions)
 
 </div>

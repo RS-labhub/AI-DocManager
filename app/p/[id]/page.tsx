@@ -105,9 +105,9 @@ export default function PublicPageView() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-16 sm:pb-20">
       {/* Cover */}
-      <div className="relative h-28 sm:h-36 md:h-52 w-full bg-gradient-to-br from-muted to-muted/40 overflow-hidden">
+      <div className="relative h-32 sm:h-40 md:h-52 w-full bg-gradient-to-br from-muted to-muted/40 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={page.cover_url || "/cover-image.png"}
@@ -117,27 +117,27 @@ export default function PublicPageView() {
       </div>
 
       {/* Emoji + title */}
-      <div className="container mx-auto max-w-4xl px-3 sm:px-4">
-        <div className="relative -mt-7 sm:-mt-8 mb-2 flex items-end justify-between gap-2">
-          <span className="inline-block text-4xl sm:text-5xl leading-none bg-background rounded-md px-2 py-1 shadow-sm border">
+      <div className="container mx-auto max-w-4xl px-4 sm:px-6">
+        <div className="relative -mt-8 sm:-mt-10 mb-3 flex items-start justify-between gap-3">
+          <span className="inline-flex items-center justify-center text-4xl sm:text-5xl leading-none bg-background rounded-lg px-2.5 py-1.5 shadow-sm border shrink-0">
             {page.emoji || "📄"}
           </span>
-          <span className="flex items-center gap-1 text-[11px] sm:text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-1 mb-1 shrink-0">
+          <span className="flex items-center gap-1 text-[10px] sm:text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 sm:px-2.5 py-1 mt-2 shrink-0 whitespace-nowrap">
             <Globe className="h-3 w-3" />
-            <span className="hidden xs:inline sm:inline">Public page</span>
+            <span>Public Page</span>
           </span>
         </div>
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-1 break-words">
+        <h1 className="text-[22px] leading-tight sm:text-3xl md:text-4xl font-bold tracking-tight mb-2 break-words">
           {page.title || "Untitled"}
         </h1>
-        <p className="text-xs text-muted-foreground mb-4">
+        <p className="text-[11px] sm:text-xs text-muted-foreground mb-5 sm:mb-6">
           Shared on{" "}
           <Link href="/" className="underline underline-offset-2 hover:text-foreground">
             R&apos;s DocManager
           </Link>
         </p>
 
-        <div className="-mx-3 sm:mx-0 overflow-x-hidden">
+        <div className="overflow-x-hidden">
           <PageEditor
             initialContent={page.content as unknown[]}
             readOnly
