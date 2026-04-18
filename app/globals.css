@@ -176,3 +176,334 @@
   background: hsl(var(--primary) / 0.2);
   color: inherit;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   BlockNote editor overrides
+   ───────────────────────────────────────────────────────────────
+   BlockNote ships CSS that relies on `attr(data-index)` inside a
+   CSS custom property to render numbered list numbers. That usage
+   of `attr()` is part of CSS Values L5 and is NOT yet supported in
+   current Chrome/Firefox, so the numbered-list marker collapses
+   to just ".". We work around it with CSS counters, which are
+   supported everywhere. We also re-assert bullet markers and
+   caption typography.
+   ═══════════════════════════════════════════════════════════════ */
+
+.blocknote-surface {
+  counter-reset: bn-ol;
+}
+
+/* The block group is the nearest common ancestor of a run of
+   numbered list items. Scoping the counter to it means each run
+   of numberedListItem blocks restarts at 1 — no :has() needed. */
+.blocknote-surface .bn-block-group {
+  counter-reset: bn-ol;
+}
+
+/* Numbered list: render via a counter instead of var(--index). */
+.blocknote-surface
+  .bn-block-outer
+  > .bn-block
+  > .bn-block-content[data-content-type="numberedListItem"] {
+  counter-increment: bn-ol;
+}
+
+.blocknote-surface
+  .bn-block-outer
+  > .bn-block
+  > .bn-block-content[data-content-type="numberedListItem"]::before,
+.blocknote-surface
+  .bn-block-outer
+  > .bn-block
+  > div[data-type="modification"]
+  > .bn-block-content[data-content-type="numberedListItem"]::before {
+  content: counter(bn-ol) "." !important;
+  display: flex;
+  justify-content: center;
+  min-width: 24px;
+  padding-right: 4px;
+}
+
+/* Nested numbered lists get their own counter scope. */
+.blocknote-surface .bn-block-group .bn-block-group {
+  counter-reset: bn-ol;
+}
+
+/* Bullet list: force the marker character even when BlockNote's
+   data-prev-type chain isn't wired up (e.g. in rendered previews). */
+.blocknote-surface
+  .bn-block-outer
+  > .bn-block
+  > .bn-block-content[data-content-type="bulletListItem"]::before,
+.blocknote-surface
+  .bn-block-outer
+  > .bn-block
+  > div[data-type="modification"]
+  > .bn-block-content[data-content-type="bulletListItem"]::before {
+  content: "•" !important;
+  display: flex;
+  justify-content: center;
+  min-width: 24px;
+  padding-right: 4px;
+}
+
+/* Nested bullets: hollow, then square. */
+.blocknote-surface
+  [data-content-type="bulletListItem"]
+  ~ .bn-block-group
+  .bn-block-content[data-content-type="bulletListItem"]::before {
+  content: "◦" !important;
+}
+.blocknote-surface
+  [data-content-type="bulletListItem"]
+  ~ .bn-block-group
+  [data-content-type="bulletListItem"]
+  ~ .bn-block-group
+  .bn-block-content[data-content-type="bulletListItem"]::before {
+  content: "▪" !important;
+}
+
+/* Embedded media captions: centered + italic. */
+.blocknote-surface .bn-file-caption,
+.blocknote-surface .bn-visual-media-caption,
+.blocknote-surface figure figcaption,
+.blocknote-surface [data-file-block] .bn-inline-content,
+.blocknote-surface [data-content-type="image"] .bn-file-caption,
+.blocknote-surface [data-content-type="video"] .bn-file-caption,
+.blocknote-surface [data-content-type="audio"] .bn-file-caption,
+.blocknote-surface [data-content-type="file"] .bn-file-caption {
+  text-align: center;
+  font-style: italic;
+  display: block;
+  width: 100%;
+}
+
+/* Make embedded iframes responsive. BlockNote's video block uses
+   an <iframe> for YouTube/Vimeo; without this it's fixed-width
+   and overflows on mobile. */
+.blocknote-surface iframe {
+  max-width: 100%;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  border: 0;
+  border-radius: 8px;
+}
+
+.blocknote-surface video {
+  max-width: 100%;
+  width: 100%;
+}
+
+/* Audio: full-width native player. Don't override the height — the
+   browser already paints the controls at their natural size; forcing
+   a fixed height clipped them in Chromium/Firefox. Just make sure
+   the wrapper stretches so the player looks intentional rather than
+   hugging the caption. */
+.blocknote-surface .bn-audio,
+.blocknote-surface [data-content-type="audio"] audio {
+  width: 100%;
+  display: block;
+}
+.blocknote-surface [data-content-type="audio"]
+  > .bn-file-block-content-wrapper {
+  width: 100%;
+  /* Keep the children top-aligned so the caption sits immediately
+     below the player instead of centred in a tall flex container. */
+  align-items: stretch;
+}
+
+/* Generic file block: stretch the name+icon row to full width so
+   the embed reads like a proper attachment card (previously it
+   shrank to the length of the filename). */
+.blocknote-surface [data-content-type="file"]
+  > .bn-file-block-content-wrapper {
+  width: 100%;
+}
+.blocknote-surface [data-content-type="file"] .bn-file-name-with-icon {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+/* Prevent the editor surface from forcing horizontal scroll on
+   narrow viewports — embeds and long code lines otherwise blow
+   past the viewport on /p/<id>. */
+.blocknote-surface .bn-editor {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* File-block hover: upstream hard-codes a near-white background
+   which is unreadable in dark mode. Re-theme it using the app's
+   muted palette so it works in both themes. */
+.blocknote-surface [data-file-block] .bn-file-name-with-icon:hover,
+.blocknote-surface .bn-editor[contenteditable="true"] [data-file-block] .bn-add-file-button:hover,
+.blocknote-surface .ProseMirror-selectednode .bn-file-name-with-icon {
+  background-color: hsl(var(--muted)) !important;
+  color: hsl(var(--foreground));
+}
+
+.blocknote-surface [data-file-block] .bn-file-block-content-wrapper {
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.35);
+}
+
+.blocknote-surface [data-file-block] .bn-add-file-button {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Heading spacing: give headings breathing room proportional to
+   their level. BlockNote renders every block with tight default
+   margins which makes headings feel "sticky" against the
+   surrounding paragraphs. */
+.blocknote-surface .bn-block-content[data-content-type="heading"][data-level="1"] {
+  margin-top: 1.75em;
+  margin-bottom: 0.4em;
+}
+.blocknote-surface .bn-block-content[data-content-type="heading"][data-level="2"] {
+  margin-top: 1.4em;
+  margin-bottom: 0.35em;
+}
+.blocknote-surface .bn-block-content[data-content-type="heading"][data-level="3"] {
+  margin-top: 1.1em;
+  margin-bottom: 0.3em;
+}
+/* First heading shouldn't push itself down inside the editor. */
+.blocknote-surface
+  .bn-block-group
+  > .bn-block-outer:first-child
+  > .bn-block
+  > .bn-block-content[data-content-type="heading"] {
+  margin-top: 0;
+}
+
+/* Code block: a touch more vertical padding so fenced code has
+   some breathing room. We don't ship a language picker — see the
+   comment in page-editor.tsx for why. */
+.blocknote-surface .bn-block-content[data-content-type="codeBlock"] {
+  padding: 10px 14px;
+}
+
+/* The copy button is appended to `.bn-block-outer`, outside the
+   ProseMirror-managed content, so we need that wrapper to
+   establish a positioning context. */
+.blocknote-surface .bn-block-outer.bn-has-copy-btn {
+  position: relative;
+}
+.blocknote-surface .bn-code-copy {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-family: inherit;
+  color: hsl(var(--muted-foreground));
+  background-color: hsl(var(--background) / 0.9);
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: color 120ms ease, background-color 120ms ease,
+    border-color 120ms ease;
+}
+.blocknote-surface .bn-code-copy:hover,
+.blocknote-surface .bn-code-copy:focus,
+.blocknote-surface .bn-code-copy:focus-visible {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--ring) / 0.5);
+  background-color: hsl(var(--background));
+  outline: none;
+}
+.blocknote-surface .bn-code-copy svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── Link hover overlay ───────────────────────────────────────
+   Lives on <body> as a portal. Shown by the enhancer on
+   mouseenter of an anchor inside the editor. */
+.bn-link-overlay {
+  position: absolute;
+  z-index: 60;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  max-width: min(460px, 90vw);
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.25);
+  font-size: 12px;
+}
+.bn-link-overlay__url {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--foreground));
+  text-decoration: none;
+}
+.bn-link-overlay__url:hover {
+  text-decoration: underline;
+}
+.bn-link-overlay__btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.bn-link-overlay__btn:hover {
+  background: hsl(var(--muted));
+}
+.bn-link-overlay[data-editable="0"] .bn-link-overlay__unlink {
+  display: none;
+}
+
+/* ── File-block "Open" link ──────────────────────────────────
+   Injected by `enhanceFileBlocks` for generic file embeds so
+   viewers can open the attachment in a new tab without leaving
+   the page. We slot it at the end of the filename row so the
+   icon + filename + open button read as a single attachment card. */
+.blocknote-surface .bn-file-name-with-icon {
+  align-items: center;
+}
+.blocknote-surface .bn-file-open-link {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 120ms ease, background-color 120ms ease,
+    border-color 120ms ease;
+}
+.blocknote-surface .bn-file-open-link:hover {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--ring) / 0.5);
+  background: hsl(var(--muted));
+  text-decoration: none;
+}
+.blocknote-surface .bn-file-open-link svg {
+  flex-shrink: 0;
+}

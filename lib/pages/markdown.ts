@@ -33,9 +33,24 @@ function inlineToMarkdown(content: BNBlock["content"]): string {
   if (typeof content === "string") return content;
   return content
     .map((run) => {
-      if (run.type !== "text") return "";
-      let text = run.text ?? "";
-      const s = run.styles ?? {};
+      // Link nodes carry their own content array — flatten by
+      // recursing so nested formatting survives the round-trip.
+      const r = run as unknown as
+        | InlineRun
+        | {
+            type: "link";
+            href: string;
+            content?: InlineRun[];
+          };
+
+      if (r.type === "link") {
+        const inner = inlineToMarkdown(r.content ?? []);
+        return `[${inner}](${r.href})`;
+      }
+
+      if (r.type !== "text") return "";
+      let text = r.text ?? "";
+      const s = r.styles ?? {};
       if (s.code) text = `\`${text}\``;
       if (s.bold) text = `**${text}**`;
       if (s.italic) text = `*${text}*`;
@@ -93,9 +108,14 @@ function blockToMarkdown(block: BNBlock, indent = 0): string {
     }
     case "image": {
       const url = (block.props as { url?: string } | undefined)?.url ?? "";
-      const caption = inline || "";
+      const caption =
+        (block.props as { caption?: string } | undefined)?.caption ??
+        inline ??
+        "";
       return `${pad}![${caption}](${url})`;
     }
+    case "divider":
+      return `${pad}---`;
     case "paragraph":
     default:
       return `${pad}${inline}`.trimEnd();
@@ -113,15 +133,170 @@ export function blocksToMarkdown(blocks: unknown[]): string {
 
 /* ─── markdown → blocks ─────────────────────────────────────── */
 
-function plainText(text: string): InlineRun[] {
+/**
+ * Parse a single line (or span) of markdown inline syntax into
+ * BlockNote's inline content runs. Handles:
+ *   • **bold** and __bold__
+ *   • *italic* and _italic_
+ *   • ~~strike~~
+ *   • `inline code`
+ *   • [label](url)
+ * Order matters — code is captured first so other marks inside a
+ * code span are treated as literal characters.
+ */
+function parseInline(text: string): InlineRun[] {
   if (!text) return [];
-  return [{ type: "text", text, styles: {} }];
+  const runs: InlineRun[] = [];
+
+  // Token types we split the string into.
+  type Token =
+    | { kind: "text"; value: string }
+    | { kind: "code"; value: string }
+    | { kind: "link"; label: string; url: string }
+    | { kind: "mark"; style: "bold" | "italic" | "strike"; value: string };
+
+  // Greedy tokeniser: walk the string and at every position try to
+  // match one of the supported inline patterns. Whatever doesn't
+  // match is accumulated as plain text.
+  const tokens: Token[] = [];
+  let i = 0;
+  let buf = "";
+  const flush = () => {
+    if (buf) {
+      tokens.push({ kind: "text", value: buf });
+      buf = "";
+    }
+  };
+
+  while (i < text.length) {
+    const rest = text.slice(i);
+
+    // Inline code — ``...`` or `...`
+    const codeDouble = rest.match(/^``([^`]+)``/);
+    if (codeDouble) {
+      flush();
+      tokens.push({ kind: "code", value: codeDouble[1] });
+      i += codeDouble[0].length;
+      continue;
+    }
+    const codeSingle = rest.match(/^`([^`\n]+)`/);
+    if (codeSingle) {
+      flush();
+      tokens.push({ kind: "code", value: codeSingle[1] });
+      i += codeSingle[0].length;
+      continue;
+    }
+
+    // Image: swallow but keep the alt text — inline images aren't
+    // representable as a style, so we drop them with a placeholder.
+    const img = rest.match(/^!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/);
+    if (img) {
+      flush();
+      // Treat the alt text as plain text so the page isn't blank.
+      if (img[1]) tokens.push({ kind: "text", value: img[1] });
+      i += img[0].length;
+      continue;
+    }
+
+    // Link [label](url)
+    const link = rest.match(/^\[([^\]]+)\]\(([^)\s]+)[^)]*\)/);
+    if (link) {
+      flush();
+      tokens.push({ kind: "link", label: link[1], url: link[2] });
+      i += link[0].length;
+      continue;
+    }
+
+    // ~~strike~~
+    const strike = rest.match(/^~~([^~\n]+)~~/);
+    if (strike) {
+      flush();
+      tokens.push({ kind: "mark", style: "strike", value: strike[1] });
+      i += strike[0].length;
+      continue;
+    }
+
+    // **bold** or __bold__
+    const bold = rest.match(/^(\*\*|__)([^\n]+?)\1/);
+    if (bold) {
+      flush();
+      tokens.push({ kind: "mark", style: "bold", value: bold[2] });
+      i += bold[0].length;
+      continue;
+    }
+
+    // *italic* or _italic_ (avoid matching inside words).
+    const italic = rest.match(/^(\*|_)([^\s*_][^*_\n]*?)\1/);
+    if (italic) {
+      flush();
+      tokens.push({ kind: "mark", style: "italic", value: italic[2] });
+      i += italic[0].length;
+      continue;
+    }
+
+    buf += text[i];
+    i++;
+  }
+  flush();
+
+  for (const tok of tokens) {
+    switch (tok.kind) {
+      case "text":
+        runs.push({ type: "text", text: tok.value, styles: {} });
+        break;
+      case "code":
+        runs.push({ type: "text", text: tok.value, styles: { code: true } });
+        break;
+      case "link":
+        // BlockNote represents links as a "link" content object with
+        // child text runs. Callers push these through as-is because
+        // inlineToMarkdown only reads runs with type === "text".
+        (runs as unknown as Array<Record<string, unknown>>).push({
+          type: "link",
+          href: tok.url,
+          content: [{ type: "text", text: tok.label, styles: {} }],
+        });
+        break;
+      case "mark": {
+        // Recurse so that "**_nested_**" becomes bold+italic.
+        const inner = parseInline(tok.value);
+        for (const run of inner) {
+          if (run.type !== "text") {
+            runs.push(run);
+            continue;
+          }
+          runs.push({
+            type: "text",
+            text: run.text,
+            styles: { ...(run.styles ?? {}), [tok.style]: true },
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  return runs;
 }
 
+// Back-compat: some callers might still import the old name.
+function plainText(text: string): InlineRun[] {
+  return parseInline(text);
+}
+void plainText;
+
 /**
- * Very small markdown-to-blocks converter — enough for `.md`
- * uploads to seed a usable starting page. Users can clean up the
- * structure inside the editor afterwards.
+ * Markdown → BlockNote blocks. Supports:
+ *   • headings h1..h6
+ *   • bullet / numbered / task lists (nested via indent of 2 spaces)
+ *   • block quotes
+ *   • fenced code blocks with language hint
+ *   • block-level images
+ *   • horizontal rules → divider block
+ *   • GitHub-style tables (stored as a paragraph with the raw table
+ *     text for now — BlockNote's table block has a different data
+ *     shape and writing a fully faithful converter is out of scope).
+ *   • inline formatting via `parseInline` (see above)
  */
 export function markdownToBlocks(markdown: string): BNBlock[] {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
@@ -132,53 +307,135 @@ export function markdownToBlocks(markdown: string): BNBlock[] {
     const line = lines[i];
 
     // Code fence
-    const fence = line.match(/^```(\w+)?\s*$/);
+    const fence = line.match(/^```([\w+-]+)?\s*$/);
     if (fence) {
       const lang = fence[1] ?? "";
       const buf: string[] = [];
       i++;
-      while (i < lines.length && !lines[i].startsWith("```")) {
+      while (i < lines.length && !/^```\s*$/.test(lines[i])) {
         buf.push(lines[i]);
         i++;
       }
       i++; // closing fence
       out.push({
         type: "codeBlock",
-        props: { language: lang },
+        props: { language: lang || "text" },
         content: buf.join("\n"),
       });
       continue;
     }
 
-    // Heading 1-3
-    const heading = line.match(/^(#{1,3})\s+(.+?)\s*$/);
+    // Heading 1..6
+    const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
     if (heading) {
+      // BlockNote's heading block only supports levels 1-3 by default;
+      // clamp to stay within that range while preserving hierarchy.
+      const rawLevel = heading[1].length;
+      const level = Math.min(Math.max(rawLevel, 1), 3);
       out.push({
         type: "heading",
-        props: { level: heading[1].length },
-        content: plainText(heading[2]),
+        props: { level },
+        content: parseInline(heading[2]),
+      });
+      i++;
+      continue;
+    }
+
+    // Horizontal rule: --- or *** or ___ on its own line
+    if (/^(\s*)(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      out.push({ type: "divider", content: [] });
+      i++;
+      continue;
+    }
+
+    // GitHub-style table:
+    //   | col a | col b |
+    //   | ----- | ----- |
+    //   | ...   | ...   |
+    if (
+      /^\s*\|.+\|\s*$/.test(line) &&
+      i + 1 < lines.length &&
+      /^\s*\|[\s:-|]+\|\s*$/.test(lines[i + 1])
+    ) {
+      const tableLines: string[] = [line, lines[i + 1]];
+      i += 2;
+      while (i < lines.length && /^\s*\|.+\|\s*$/.test(lines[i])) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      const splitRow = (row: string) =>
+        row
+          .trim()
+          .replace(/^\||\|$/g, "")
+          .split("|")
+          .map((c) => c.trim());
+      const header = splitRow(tableLines[0]);
+      const bodyRows = tableLines.slice(2).map(splitRow);
+
+      // Render a readable plain-text table as a paragraph so no
+      // content is lost. Users can convert it to a BlockNote table
+      // inside the editor. We use a tabular layout with padding
+      // so it stays legible.
+      const colWidths = header.map((h, c) =>
+        Math.max(
+          h.length,
+          ...bodyRows.map((r) => (r[c] ?? "").length),
+        ),
+      );
+      const pad = (cells: string[]) =>
+        cells
+          .map((cell, c) => cell.padEnd(colWidths[c] ?? 0))
+          .join(" │ ");
+      const sep = colWidths.map((w) => "─".repeat(w)).join("─┼─");
+      const rendered = [
+        pad(header),
+        sep,
+        ...bodyRows.map((r) => pad(r.concat(Array(header.length - r.length).fill("")))),
+      ].join("\n");
+
+      out.push({
+        type: "codeBlock",
+        props: { language: "text" },
+        content: rendered,
+      });
+      continue;
+    }
+
+    // Task list item: - [ ] or - [x]
+    const task = line.match(/^(\s*)[-*+]\s+\[( |x|X)\]\s+(.+)$/);
+    if (task) {
+      out.push({
+        type: "checkListItem",
+        props: { checked: task[2].toLowerCase() === "x" },
+        content: parseInline(task[3]),
       });
       i++;
       continue;
     }
 
     // Bullet list item
-    const bullet = line.match(/^[-*+]\s+(.+)$/);
+    const bullet = line.match(/^(\s*)[-*+]\s+(.+)$/);
     if (bullet) {
-      out.push({ type: "bulletListItem", content: plainText(bullet[1]) });
+      out.push({
+        type: "bulletListItem",
+        content: parseInline(bullet[2]),
+      });
       i++;
       continue;
     }
 
     // Numbered list item
-    const numbered = line.match(/^\d+\.\s+(.+)$/);
+    const numbered = line.match(/^(\s*)\d+\.\s+(.+)$/);
     if (numbered) {
-      out.push({ type: "numberedListItem", content: plainText(numbered[1]) });
+      out.push({
+        type: "numberedListItem",
+        content: parseInline(numbered[2]),
+      });
       i++;
       continue;
     }
 
-    // Block quote
+    // Block quote (consumes consecutive >-prefixed lines)
     const quote = line.match(/^>\s?(.*)$/);
     if (quote) {
       const buf = [quote[1]];
@@ -187,17 +444,17 @@ export function markdownToBlocks(markdown: string): BNBlock[] {
         buf.push(lines[i].replace(/^>\s?/, ""));
         i++;
       }
-      out.push({ type: "quote", content: plainText(buf.join("\n")) });
+      out.push({ type: "quote", content: parseInline(buf.join(" ")) });
       continue;
     }
 
-    // Image
+    // Block-level image: ![alt](url) on its own line
     const image = line.match(/^!\[(.*?)\]\((.+?)\)\s*$/);
     if (image) {
       out.push({
         type: "image",
-        props: { url: image[2] },
-        content: plainText(image[1]),
+        props: { url: image[2], caption: image[1] },
+        content: [],
       });
       i++;
       continue;
@@ -209,22 +466,28 @@ export function markdownToBlocks(markdown: string): BNBlock[] {
       continue;
     }
 
-    // Paragraph (collapse consecutive non-blank lines)
+    // Paragraph (collapse consecutive non-blank lines that aren't
+    // the start of another block construct).
     const paraBuf = [line];
     i++;
     while (
       i < lines.length &&
       lines[i].trim() &&
-      !/^(#{1,3})\s/.test(lines[i]) &&
-      !/^[-*+]\s/.test(lines[i]) &&
-      !/^\d+\.\s/.test(lines[i]) &&
+      !/^(#{1,6})\s/.test(lines[i]) &&
+      !/^(\s*)[-*+]\s/.test(lines[i]) &&
+      !/^(\s*)\d+\.\s/.test(lines[i]) &&
       !/^>\s?/.test(lines[i]) &&
-      !/^```/.test(lines[i])
+      !/^```/.test(lines[i]) &&
+      !/^(\s*)(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i]) &&
+      !/^\s*\|.+\|\s*$/.test(lines[i])
     ) {
       paraBuf.push(lines[i]);
       i++;
     }
-    out.push({ type: "paragraph", content: plainText(paraBuf.join(" ")) });
+    out.push({
+      type: "paragraph",
+      content: parseInline(paraBuf.join(" ")),
+    });
   }
 
   if (out.length === 0) {

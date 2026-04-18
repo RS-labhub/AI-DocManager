@@ -1,4 +1,4 @@
-# Contributing to Radhika's DocManager
+# Contributing to R's DocManager
 
 ## Development Setup
 

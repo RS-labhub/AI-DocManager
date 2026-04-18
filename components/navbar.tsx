@@ -192,7 +192,7 @@ export default function Navbar() {
               style={{ height: 26, width: "auto" }}
               className="object-contain"
             />
-            <span className="text-[13px] sm:text-sm font-semibold tracking-tight">R&apos;s DocManager</span>
+            <span className="hidden min-[380px]:inline text-[13px] sm:text-sm font-semibold tracking-tight truncate max-w-[140px] sm:max-w-none">R&apos;s DocManager</span>
           </Link>
 
           {/* Desktop Nav Links */}
@@ -230,9 +230,9 @@ export default function Navbar() {
           )}
           {/* Mobile New Doc icon button */}
           {user && (
-            <Button asChild size="icon" className="sm:hidden h-8 w-8">
+            <Button asChild size="icon" className="sm:hidden h-7 w-7">
               <Link href="/dashboard/documents/new">
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3 w-3" />
               </Link>
             </Button>
           )}
@@ -279,12 +279,15 @@ export default function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <div className="hidden md:flex items-center gap-2">
-              <Button asChild variant="ghost" size="sm">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Button asChild variant="ghost" size="sm" className="h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm">
                 <Link href="/login">Log in</Link>
               </Button>
-              <Button asChild size="sm">
-                <Link href="/register">Get Started</Link>
+              <Button asChild size="sm" className="h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm">
+                <Link href="/register">
+                  <span className="sm:hidden">Sign up</span>
+                  <span className="hidden sm:inline">Get Started</span>
+                </Link>
               </Button>
             </div>
           )}

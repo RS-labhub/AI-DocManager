@@ -123,8 +123,8 @@ export default function Home() {
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
-              <span className="sm:hidden">Radhika's Document Manager</span>
-              <span className="hidden sm:inline">Radhika&apos;s DocManager &mdash; Enterprise AI Document Management</span>
+              <span className="sm:hidden">R's Document Manager</span>
+              <span className="hidden sm:inline">R&apos;s DocManager &mdash; Enterprise AI Document Management</span>
             </div>
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter leading-[1.05] animate-fade-in">

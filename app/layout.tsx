@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     ...(siteUrl ? { url: siteUrl } : {}),
     siteName: "rs-docmanager",
-    title: "Radhika's DocManager — Intelligent Document Management System",
+    title: "R's DocManager — Intelligent Document Management System",
     description:
       "Enterprise-grade AI document management with encrypted API keys, multi-org support, 4-tier RBAC, and fine-grained access control.",
     images: [
@@ -56,13 +56,13 @@ export const metadata: Metadata = {
         url: "/og.png",
         width: 1200,
         height: 630,
-        alt: "Radhika's DocManager — Intelligent Document Management System",
+        alt: "R's DocManager — Intelligent Document Management System",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Radhika's DocManager — Intelligent Document Management System",
+    title: "R's DocManager — Intelligent Document Management System",
     description:
       "AI document management with encrypted API keys, multi-org support, and 4-tier RBAC.",
     images: ["/og.png"],

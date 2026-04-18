@@ -31,6 +31,38 @@ function slugify(t: string) {
   return t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
+/**
+ * GitHub-style markdown tables require the header, separator, and
+ * body rows to be contiguous lines — any blank line between them
+ * breaks the table. Some sources (pasted from Notion / Confluence)
+ * include blank lines between every row, so remark-gfm silently
+ * falls back to rendering them as stray paragraphs with pipe
+ * characters. Collapse those internal blank lines here so the
+ * GFM parser sees a single well-formed table.
+ */
+function normalizeMarkdownTables(src: string): string {
+  const lines = src.replace(/\r\n/g, "\n").split("\n");
+  const isTableRow = (s: string) => /^\s*\|.*\|\s*$/.test(s);
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    out.push(lines[i]);
+    if (!isTableRow(lines[i])) continue;
+    // Skip over blank lines that sit between consecutive table
+    // rows. The row we just pushed becomes the "anchor" and any
+    // number of empty lines followed by another table row gets
+    // stitched back together.
+    let j = i + 1;
+    while (j < lines.length && lines[j].trim() === "") j++;
+    if (j < lines.length && isTableRow(lines[j])) {
+      // Drop the blanks by fast-forwarding the outer loop past
+      // them — the next iteration picks up at the neighbouring
+      // table row.
+      i = j - 1;
+    }
+  }
+  return out.join("\n");
+}
+
 interface DocsViewProps {
   /** Slug from the URL (e.g. /docs/<slug>). When null, renders the first doc. */
   initialSlug?: string | null;
@@ -106,6 +138,13 @@ export default function DocsView({ initialSlug = null }: DocsViewProps) {
   }, []);
 
   const activeDoc = useMemo(() => docs.find(d => d.slug === activeSlug), [docs, activeSlug]);
+  // Pre-normalise the markdown so edge cases (e.g. tables with blank
+  // lines between rows) render correctly without forcing every doc
+  // author to hand-format their source.
+  const activeDocMarkdown = useMemo(
+    () => (activeDoc ? normalizeMarkdownTables(activeDoc.content) : ""),
+    [activeDoc],
+  );
 
   // Scroll-spy: highlight the heading closest to the top of the viewport.
   useEffect(() => {
@@ -530,7 +569,7 @@ export default function DocsView({ initialSlug = null }: DocsViewProps) {
                       img: ({src, alt}) => <img src={src} alt={alt || ""} className="rounded-lg border my-5 max-w-full h-auto" />,
                     }}
                   >
-                    {activeDoc.content}
+                    {activeDocMarkdown}
                   </ReactMarkdown>
 
                   {/* Prev / Next navigation */}

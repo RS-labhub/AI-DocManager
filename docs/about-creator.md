@@ -2,11 +2,11 @@
 
 ## Rohan Sharma
 
-Radhika's DocManager was built by **Rohan Sharma**, a passionate developer who believes in building tools that are both powerful and easy to use.
+R's DocManager was built by **Rohan Sharma**, a passionate developer who believes in building tools that are both powerful and easy to use.
 
 ## The story behind the name
 
-Radhika's DocManager is named after **Radhika Sharma** (future love), a special person whose memory inspired this project. The R in R's DocManager stands for Radhika, and the application was built as a tribute to her lasting impact. (it's an imaginary memory)
+R's DocManager is named after **Radhika Sharma** (future love), a special person whose memory inspired this project. The R in R's DocManager stands for Radhika, and the application was built as a tribute to her lasting impact. (it's an imaginary memory)
 
 > Built by Rohan Sharma, in hope of love.
 
@@ -30,7 +30,7 @@ Radhika's DocManager is named after **Radhika Sharma** (future love), a special 
 | Peerlist | [rohansrma](https://peerlist.io/rohansrma) |
 | Email | [rs4101976@gmail.com](mailto:rs4101976@gmail.com) |
 
-*Radhika's DocManager 2026. Built by Rohan Sharma in hope of love*
+*R's DocManager 2026. Built by Rohan Sharma in hope of love*
 
 ## See also
 
