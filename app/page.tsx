@@ -19,6 +19,7 @@ import {
   ShieldCheck,
 } from "lucide-react"
 import { Analytics } from "@vercel/analytics/react"
+import { PrismaticBurst } from "@/components/ui/prismatic-burst"
 
 const FEATURES = [
   {
@@ -102,42 +103,50 @@ export default function Home() {
     <>
       <div className="relative">
         {/* Hero */}
-        <section className="relative py-20 md:py-32 lg:py-40 overflow-hidden">
-          <div className="absolute inset-0 grid-bg opacity-40" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background via-background/95 to-background" />
+        <section className="relative py-20 md:py-32 lg:py-40 overflow-hidden dark:bg-[#05050a]">
+          {/* Light mode: original grid + gradient backdrop (unchanged) */}
+          <div className="absolute inset-0 grid-bg opacity-40 dark:hidden" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background via-background/95 to-background dark:hidden" />
+
+          {/* Dark mode: WebGL Prismatic Burst backdrop (only mounted in dark) */}
+          <div className="absolute inset-0 z-0 hidden dark:block">
+            <PrismaticBurst
+              animationType="rotate3d"
+              intensity={3.2}
+              speed={0.4}
+              distort={1.4}
+              rayCount={32}
+              hoverDampness={0.3}
+              mixBlendMode="lighten"
+              colors={["#ff007a", "#4d3dff", "#00d2ff", "#ffffff", "#b026ff"]}
+            />
+          </div>
+
+          {/* Dark-mode readability overlays: soft vignette + bottom fade into page */}
+          <div className="pointer-events-none absolute inset-0 z-[1] hidden dark:block bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(5,5,10,0.35)_70%,rgba(5,5,10,0.8)_100%)]" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-40 hidden dark:block bg-gradient-to-b from-transparent to-background" />
 
           <div className="container mx-auto px-4 flex flex-col items-center text-center max-w-4xl relative z-10">
-            {/* <div className="mb-6 animate-fade-in">
-            <Image
-              src="/logo.png"
-              alt="Radhika's DocManager"
-              width={200}
-              height={200}
-              className="h-10 w-auto object-contain mx-auto"
-              priority
-            />
-          </div> */}
-
-            <div className="inline-flex items-center gap-1.5 rounded-full border bg-card/50 backdrop-blur px-3 py-1.5 text-xs text-muted-foreground mb-6 animate-fade-in">
+            <div className="inline-flex items-center gap-1.5 rounded-full border bg-card/50 backdrop-blur px-3 py-1.5 text-xs text-muted-foreground mb-6 animate-fade-in dark:border-white/15 dark:bg-white/5 dark:text-white/80">
               <span className="relative flex h-2 w-2 shrink-0">
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400" />
               </span>
-              <span className="sm:hidden">R's Document Manager</span>
+              <span className="sm:hidden">R&apos;s Document Manager</span>
               <span className="hidden sm:inline">R&apos;s DocManager &mdash; Enterprise AI Document Management</span>
             </div>
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter leading-[1.05] animate-fade-in">
-              <span className="bg-gradient-to-br from-foreground via-foreground/90 to-foreground/70 bg-clip-text">
+              <span className="bg-gradient-to-br from-foreground via-foreground/90 to-foreground/70 bg-clip-text dark:from-white dark:via-white/90 dark:to-white/70 dark:text-transparent">
                 Intelligent documents.
               </span>
               <br />
-              <span className="bg-gradient-to-br from-foreground/80 to-foreground/50 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-br from-foreground/80 to-foreground/50 bg-clip-text text-transparent dark:from-white/80 dark:to-white/40">
                 Secure by design.
               </span>
             </h1>
 
-            <p className="mt-5 text-sm md:text-base text-muted-foreground max-w-lg leading-relaxed animate-fade-in-up">
+            <p className="mt-5 text-sm md:text-base text-muted-foreground max-w-lg leading-relaxed animate-fade-in-up dark:text-white/60">
               AI-powered document management with encrypted API keys, multi-organization support, and fine-grained access control. Built for teams that take security seriously.
             </p>
 
@@ -147,14 +156,19 @@ export default function Home() {
                   Get Started <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" size="lg" className="h-10 px-6 text-sm">
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="h-10 px-6 text-sm dark:bg-white/5 dark:border-white/20 dark:text-white dark:hover:bg-white/10 dark:hover:text-white"
+              >
                 <Link href="/login">Sign In</Link>
               </Button>
             </div>
 
             <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 mt-12 animate-fade-in-up">
               {HIGHLIGHTS.map((item) => (
-                <span key={item.text} className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                <span key={item.text} className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 dark:text-white/60">
                   <item.icon className="h-3 w-3" />
                   {item.text}
                 </span>

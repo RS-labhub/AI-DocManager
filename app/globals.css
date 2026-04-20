@@ -133,18 +133,26 @@
 
 /* ─── Scrollbar ────────────────────────────────────────────── */
 
-::-webkit-scrollbar {
-  width: 3px;
-  height: 3px;
+html {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
 }
-::-webkit-scrollbar-track {
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
   background: transparent;
 }
-::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   @apply bg-border rounded-full;
 }
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-muted-foreground/30;
+*::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* ─── Animations ───────────────────────────────────────────── */
