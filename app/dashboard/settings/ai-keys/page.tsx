@@ -60,7 +60,7 @@ export default function AiKeysPage() {
       const res = await fetch("/api/ai-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, provider, label: label || `${provider} key`, apiKey }),
+        body: JSON.stringify({ provider, label: label || `${provider} key`, api_key: apiKey }),
       })
       if (res.ok) {
         setSuccess("API key added successfully")
