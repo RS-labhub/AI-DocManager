@@ -81,55 +81,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [supabase]
   );
 
-  const refresh = useCallback(async () => {
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-    if (!authUser) {
-      setUser(null);
-      return;
+  /** Returns Profile, null (signed out / disabled), or undefined (transient error — keep current state). */
+  const fetchCurrentProfile = useCallback(async (): Promise<
+    Profile | null | undefined
+  > => {
+    try {
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError) return undefined;
+      if (!authUser) return null;
+
+      const profile = await loadProfile(authUser.id);
+      if (!profile) return undefined;
+
+      if (!profile.is_active || profile.approval_status === "rejected") {
+        await supabase.auth.signOut();
+        return null;
+      }
+      return profile;
+    } catch {
+      return undefined;
     }
-    const profile = await loadProfile(authUser.id);
-    if (!profile || !profile.is_active) {
-      await supabase.auth.signOut();
-      setUser(null);
-      return;
-    }
-    if (profile.approval_status === "rejected") {
-      await supabase.auth.signOut();
-      setUser(null);
-      return;
-    }
-    setUser(profile);
   }, [supabase, loadProfile]);
+
+  const refresh = useCallback(async () => {
+    const result = await fetchCurrentProfile();
+    if (result === undefined) return;
+    setUser(result);
+  }, [fetchCurrentProfile]);
 
   /* ─── Initial load + subscribe to auth state changes ─── */
   useEffect(() => {
     let mounted = true;
+    // Hard ceiling so the UI never deadlocks on a hung Supabase call.
+    const loadingFloor = setTimeout(() => { if (mounted) setIsLoading(false); }, 4000);
 
     (async () => {
-      await refresh();
-      if (mounted) setIsLoading(false);
+      // Fast path: read session from localStorage instead of a round-trip to Supabase Auth.
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        if (mounted) {
+          setUser(null);
+          setIsLoading(false);
+          clearTimeout(loadingFloor);
+        }
+        return;
+      }
+
+      const profile = await loadProfile(session.user.id);
+      if (!mounted) return;
+
+      if (profile && profile.is_active && profile.approval_status !== "rejected") {
+        setUser(profile);
+      } else if (profile && (!profile.is_active || profile.approval_status === "rejected")) {
+        await supabase.auth.signOut();
+        setUser(null);
+      }
+      // Transient profile fetch failure → leave user as-is, just stop loading.
+      setIsLoading(false);
+      clearTimeout(loadingFloor);
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!session?.user) {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // Ignore TOKEN_REFRESHED / USER_UPDATED / INITIAL_SESSION — those re-fetches
+      // race with the initial load and briefly null out the user (stale-session bug).
+      if (event === "SIGNED_OUT" || !session?.user) {
         setUser(null);
         return;
       }
-      const profile = await loadProfile(session.user.id);
-      if (!profile || !profile.is_active) {
-        setUser(null);
-        return;
+      if (event === "SIGNED_IN") {
+        loadProfile(session.user.id).then((profile) => {
+          if (!mounted) return;
+          if (profile && profile.is_active && profile.approval_status !== "rejected") {
+            setUser(profile);
+          }
+        });
       }
-      setUser(profile);
     });
 
     return () => {
       mounted = false;
+      clearTimeout(loadingFloor);
       sub.subscription.unsubscribe();
     };
-  }, [supabase, refresh, loadProfile]);
+  }, [supabase, loadProfile]);
 
   /* ─── Client-side route guidance (server enforces via proxy) ─── */
   useEffect(() => {
